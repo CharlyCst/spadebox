@@ -46,16 +46,21 @@ pub struct ReadFileTool;
 impl Tool for ReadFileTool {
     type Params = ReadParams;
     const NAME: &'static str = "read_file";
-    const DESCRIPTION: &'static str =
-        "Read the full text content of a file. \
+    const DESCRIPTION: &'static str = "Read the full text content of a file. \
          Provide a relative path (e.g. 'src/main.rs' or 'README.md'). \
          Returns the file's content as a UTF-8 string.";
 
     async fn run(sandbox: &Sandbox, params: ReadParams) -> Result<String> {
-        let file = sandbox.root.open(&params.path).map_err(|e| map_io_err(&params.path, e))?;
+        let file = sandbox
+            .root
+            .open(&params.path)
+            .map_err(|e| map_io_err(&params.path, e))?;
         let mut tokio_file = tokio::fs::File::from_std(file.into_std());
         let mut buf = Vec::new();
-        tokio_file.read_to_end(&mut buf).await.map_err(SpadeboxError::IoError)?;
+        tokio_file
+            .read_to_end(&mut buf)
+            .await
+            .map_err(SpadeboxError::IoError)?;
         Ok(String::from_utf8_lossy(&buf).into_owned())
     }
 }
@@ -77,16 +82,25 @@ pub struct WriteFileTool;
 impl Tool for WriteFileTool {
     type Params = WriteParams;
     const NAME: &'static str = "write_file";
-    const DESCRIPTION: &'static str =
-        "Write text content to a file. \
+    const DESCRIPTION: &'static str = "Write text content to a file. \
          Provide a relative path (e.g. 'output.txt') and the full UTF-8 content to write. \
          Creates the file if it does not exist, or overwrites it entirely if it does.";
 
     async fn run(sandbox: &Sandbox, params: WriteParams) -> Result<String> {
-        let file = sandbox.root.create(&params.path).map_err(|e| map_io_err(&params.path, e))?;
+        let file = sandbox
+            .root
+            .create(&params.path)
+            .map_err(|e| map_io_err(&params.path, e))?;
         let mut tokio_file = tokio::fs::File::from_std(file.into_std());
-        tokio_file.write_all(params.content.as_bytes()).await.map_err(SpadeboxError::IoError)?;
-        Ok(format!("Wrote {} bytes to {}", params.content.len(), params.path))
+        tokio_file
+            .write_all(params.content.as_bytes())
+            .await
+            .map_err(SpadeboxError::IoError)?;
+        Ok(format!(
+            "Wrote {} bytes to {}",
+            params.content.len(),
+            params.path
+        ))
     }
 }
 
@@ -96,7 +110,9 @@ impl Tool for WriteFileTool {
 
 /// Accepts both JSON booleans (`true`) and strings (`"true"`/`"false"`).
 /// MCP clients such as Claude Code may serialize booleans as strings.
-fn deserialize_bool_flexible<'de, D: serde::Deserializer<'de>>(d: D) -> std::result::Result<bool, D::Error> {
+fn deserialize_bool_flexible<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<bool, D::Error> {
     #[derive(Deserialize)]
     #[serde(untagged)]
     enum BoolOrString {
@@ -128,8 +144,7 @@ pub struct EditFileTool;
 impl Tool for EditFileTool {
     type Params = EditParams;
     const NAME: &'static str = "edit_file";
-    const DESCRIPTION: &'static str =
-        "Replace text within a file. Reads the file, finds the exact string provided in 'old', \
+    const DESCRIPTION: &'static str = "Replace text within a file. Reads the file, finds the exact string provided in 'old', \
          and replaces it with 'new'. By default the string must appear exactly once — include \
          enough surrounding context in 'old' to make it unique. \
          If the string appears multiple times and you want to replace all of them, set replace_all to true. \
@@ -137,19 +152,28 @@ impl Tool for EditFileTool {
 
     async fn run(sandbox: &Sandbox, params: EditParams) -> Result<String> {
         // Read
-        let file = sandbox.root.open(&params.path).map_err(|e| map_io_err(&params.path, e))?;
+        let file = sandbox
+            .root
+            .open(&params.path)
+            .map_err(|e| map_io_err(&params.path, e))?;
         let mut tokio_file = tokio::fs::File::from_std(file.into_std());
         let mut buf = Vec::new();
-        tokio_file.read_to_end(&mut buf).await.map_err(SpadeboxError::IoError)?;
-        let content = String::from_utf8(buf)
-            .map_err(|_| SpadeboxError::NotUtf8(params.path.clone()))?;
+        tokio_file
+            .read_to_end(&mut buf)
+            .await
+            .map_err(SpadeboxError::IoError)?;
+        let content =
+            String::from_utf8(buf).map_err(|_| SpadeboxError::NotUtf8(params.path.clone()))?;
 
         // Validate
         let count = content.matches(params.old.as_str()).count();
         match count {
             0 => return Err(SpadeboxError::StringNotFound(params.path.clone())),
             n if n > 1 && !params.replace_all => {
-                return Err(SpadeboxError::AmbiguousEdit { path: params.path.clone(), count: n });
+                return Err(SpadeboxError::AmbiguousEdit {
+                    path: params.path.clone(),
+                    count: n,
+                });
             }
             _ => {}
         }
@@ -160,12 +184,21 @@ impl Tool for EditFileTool {
         } else {
             content.replacen(params.old.as_str(), &params.new, 1)
         };
-        let file = sandbox.root.create(&params.path).map_err(|e| map_io_err(&params.path, e))?;
+        let file = sandbox
+            .root
+            .create(&params.path)
+            .map_err(|e| map_io_err(&params.path, e))?;
         let mut tokio_file = tokio::fs::File::from_std(file.into_std());
-        tokio_file.write_all(updated.as_bytes()).await.map_err(SpadeboxError::IoError)?;
+        tokio_file
+            .write_all(updated.as_bytes())
+            .await
+            .map_err(SpadeboxError::IoError)?;
 
         let replacements = if params.replace_all { count } else { 1 };
-        Ok(format!("Replaced {} occurrence(s) in '{}'", replacements, params.path))
+        Ok(format!(
+            "Replaced {} occurrence(s) in '{}'",
+            replacements, params.path
+        ))
     }
 }
 
@@ -173,15 +206,15 @@ impl Tool for EditFileTool {
 mod tests {
     use super::EditParams;
 
-    fn parse(replace_all: &str) -> EditParams {
-        serde_json::from_str(&format!(
-            r#"{{"path":"f","old":"a","new":"b","replace_all":{replace_all}}}"#
-        ))
-        .unwrap()
-    }
-
     #[test]
     fn deserialize_bool_flexible() {
+        fn parse(replace_all: &str) -> EditParams {
+            serde_json::from_str(&format!(
+                r#"{{"path":"f","old":"a","new":"b","replace_all":{replace_all}}}"#
+            ))
+            .unwrap()
+        }
+
         // JSON booleans
         assert!(parse("true").replace_all);
         assert!(!parse("false").replace_all);
@@ -191,14 +224,12 @@ mod tests {
         assert!(!parse(r#""false""#).replace_all);
 
         // Absent field defaults to false
-        let p: EditParams =
-            serde_json::from_str(r#"{"path":"f","old":"a","new":"b"}"#).unwrap();
+        let p: EditParams = serde_json::from_str(r#"{"path":"f","old":"a","new":"b"}"#).unwrap();
         assert!(!p.replace_all);
 
         // Invalid string is rejected
-        let result: serde_json::Result<EditParams> = serde_json::from_str(
-            r#"{"path":"f","old":"a","new":"b","replace_all":"yes"}"#,
-        );
+        let result: serde_json::Result<EditParams> =
+            serde_json::from_str(r#"{"path":"f","old":"a","new":"b","replace_all":"yes"}"#);
         assert!(result.is_err());
     }
 }

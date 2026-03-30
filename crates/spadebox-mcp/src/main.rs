@@ -83,7 +83,7 @@ impl ServerHandler for SpadeboxMcpServer {
                 return Err(McpError::invalid_params(
                     format!("unknown tool: {name}"),
                     None,
-                ))
+                ));
             }
         };
 
@@ -96,9 +96,7 @@ impl ServerHandler for SpadeboxMcpServer {
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let sandbox_root = std::env::args()
-        .nth(1)
-        .unwrap_or_else(|| ".".to_string());
+    let sandbox_root = std::env::args().nth(1).unwrap_or_else(|| ".".to_string());
 
     let sandbox = Sandbox::new(&sandbox_root)
         .map_err(|e| anyhow::anyhow!("Failed to open sandbox at {sandbox_root:?}: {e}"))?;
