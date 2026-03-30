@@ -11,7 +11,7 @@ use rmcp::{
 };
 use spadebox_core::{
     Sandbox, Tool,
-    tools::{ReadFileTool, WriteFileTool},
+    tools::{EditFileTool, ReadFileTool, WriteFileTool},
 };
 
 #[derive(Clone)]
@@ -47,7 +47,11 @@ impl ServerHandler for SpadeboxMcpServer {
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
         Ok(ListToolsResult {
-            tools: vec![mcp_tool::<ReadFileTool>(), mcp_tool::<WriteFileTool>()],
+            tools: vec![
+                mcp_tool::<ReadFileTool>(),
+                mcp_tool::<WriteFileTool>(),
+                mcp_tool::<EditFileTool>(),
+            ],
             ..Default::default()
         })
     }
@@ -69,6 +73,11 @@ impl ServerHandler for SpadeboxMcpServer {
                 let params = serde_json::from_value(args)
                     .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
                 WriteFileTool::run(&self.sandbox, params).await
+            }
+            EditFileTool::NAME => {
+                let params = serde_json::from_value(args)
+                    .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
+                EditFileTool::run(&self.sandbox, params).await
             }
             name => {
                 return Err(McpError::invalid_params(
