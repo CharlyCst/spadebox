@@ -1,0 +1,15 @@
+[package]
+name = "spadebox-mcp"
+version = "0.1.0"
+edition = "2024"
+
+[[bin]]
+name = "spadebox-mcp"
+path = "src/main.rs"
+
+[dependencies]
+spadebox-core = { path = "../spadebox-core" }
+tokio = { workspace = true }
+serde_json = { workspace = true }
+rmcp = { version = "1.3.0", features = ["server", "transport-io", "schemars"] }
+anyhow = "1.0.102"

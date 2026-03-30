@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "spadebox": {
+      "type": "stdio",
+      "command": "./target/debug/spadebox-mcp",
+      "args": [
+        "./sandbox-test"
+      ],
+      "env": {}
+    }
+  }
+}
