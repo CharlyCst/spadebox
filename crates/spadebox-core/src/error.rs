@@ -1,11 +1,11 @@
 #[derive(Debug, thiserror::Error)]
 pub enum SpadeboxError {
-    #[error("path escape attempt")]
-    EscapeAttempt,
-    #[error("not found")]
-    NotFound,
-    #[error("permission denied")]
-    PermissionDenied,
+    #[error("path escapes sandbox: '{0}'")]
+    EscapeAttempt(String),
+    #[error("file not found: '{0}'")]
+    NotFound(String),
+    #[error("permission denied: '{0}'")]
+    PermissionDenied(String),
     #[error("timeout")]
     Timeout,
     #[error("JS error: {0}")]

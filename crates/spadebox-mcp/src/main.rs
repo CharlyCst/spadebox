@@ -59,7 +59,7 @@ impl ServerHandler for SpadeboxMcpServer {
     ) -> Result<CallToolResult, McpError> {
         let args = serde_json::Value::Object(request.arguments.unwrap_or_default());
 
-        let text = match request.name.as_ref() {
+        let result = match request.name.as_ref() {
             ReadFileTool::NAME => {
                 let params = serde_json::from_value(args)
                     .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
@@ -78,8 +78,10 @@ impl ServerHandler for SpadeboxMcpServer {
             }
         };
 
-        let text = text.map_err(|e| McpError::internal_error(e.to_string(), None))?;
-        Ok(CallToolResult::success(vec![Content::text(text)]))
+        match result {
+            Ok(text) => Ok(CallToolResult::success(vec![Content::text(text)])),
+            Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
+        }
     }
 }
 

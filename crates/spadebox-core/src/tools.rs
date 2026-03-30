@@ -52,7 +52,7 @@ impl Tool for ReadFileTool {
          Returns the file's content as a UTF-8 string.";
 
     async fn run(sandbox: &Sandbox, params: ReadParams) -> Result<String> {
-        let file = sandbox.root.open(&params.path).map_err(map_io_err)?;
+        let file = sandbox.root.open(&params.path).map_err(|e| map_io_err(&params.path, e))?;
         let mut tokio_file = tokio::fs::File::from_std(file.into_std());
         let mut buf = Vec::new();
         tokio_file.read_to_end(&mut buf).await.map_err(SpadeboxError::IoError)?;
@@ -83,7 +83,7 @@ impl Tool for WriteFileTool {
          Creates the file if it does not exist, or overwrites it entirely if it does.";
 
     async fn run(sandbox: &Sandbox, params: WriteParams) -> Result<String> {
-        let file = sandbox.root.create(&params.path).map_err(map_io_err)?;
+        let file = sandbox.root.create(&params.path).map_err(|e| map_io_err(&params.path, e))?;
         let mut tokio_file = tokio::fs::File::from_std(file.into_std());
         tokio_file.write_all(params.content.as_bytes()).await.map_err(SpadeboxError::IoError)?;
         Ok(format!("Wrote {} bytes to {}", params.content.len(), params.path))
