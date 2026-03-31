@@ -14,6 +14,8 @@ pub enum SpadeboxError {
     AmbiguousEdit { path: String, count: usize },
     #[error("string not found in '{0}'")]
     StringNotFound(String),
+    #[error("invalid pattern: {0}")]
+    InvalidPattern(String),
     #[error("timeout")]
     Timeout,
     #[error("JS error: {0}")]
