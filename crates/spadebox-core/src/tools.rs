@@ -131,9 +131,9 @@ pub struct EditParams {
     pub path: String,
     /// Exact string to search for. Must appear exactly once unless replace_all is true.
     /// Include enough surrounding context to uniquely identify the location.
-    pub old: String,
+    pub old_string: String,
     /// String to replace it with.
-    pub new: String,
+    pub new_string: String,
     /// If true, replace every occurrence instead of requiring exactly one. Defaults to false.
     #[serde(default, deserialize_with = "deserialize_bool_flexible")]
     pub replace_all: bool,
@@ -144,11 +144,11 @@ pub struct EditFileTool;
 impl Tool for EditFileTool {
     type Params = EditParams;
     const NAME: &'static str = "edit_file";
-    const DESCRIPTION: &'static str = "Replace text within a file. Reads the file, finds the exact string provided in 'old', \
-         and replaces it with 'new'. By default the string must appear exactly once — include \
-         enough surrounding context in 'old' to make it unique. \
+    const DESCRIPTION: &'static str = "Replace text within a file. Reads the file, finds the exact string provided in 'old_string', \
+         and replaces it with 'new_string'. By default the string must appear exactly once — include \
+         enough surrounding context in 'old_string' to make it unique. \
          If the string appears multiple times and you want to replace all of them, set replace_all to true. \
-         Always read the file before editing to ensure 'old' matches the current content exactly.";
+         Always read the file before editing to ensure 'old_string' matches the current content exactly.";
 
     async fn run(sandbox: &Sandbox, params: EditParams) -> Result<String> {
         // Read
@@ -166,7 +166,7 @@ impl Tool for EditFileTool {
             String::from_utf8(buf).map_err(|_| SpadeboxError::NotUtf8(params.path.clone()))?;
 
         // Validate
-        let count = content.matches(params.old.as_str()).count();
+        let count = content.matches(params.old_string.as_str()).count();
         match count {
             0 => return Err(SpadeboxError::StringNotFound(params.path.clone())),
             n if n > 1 && !params.replace_all => {
@@ -180,9 +180,9 @@ impl Tool for EditFileTool {
 
         // Replace and write back
         let updated = if params.replace_all {
-            content.replace(params.old.as_str(), &params.new)
+            content.replace(params.old_string.as_str(), &params.new_string)
         } else {
-            content.replacen(params.old.as_str(), &params.new, 1)
+            content.replacen(params.old_string.as_str(), &params.new_string, 1)
         };
         let file = sandbox
             .root
@@ -210,7 +210,7 @@ mod tests {
     fn deserialize_bool_flexible() {
         fn parse(replace_all: &str) -> EditParams {
             serde_json::from_str(&format!(
-                r#"{{"path":"f","old":"a","new":"b","replace_all":{replace_all}}}"#
+                r#"{{"path":"f","old_string":"a","new_string":"b","replace_all":{replace_all}}}"#
             ))
             .unwrap()
         }
@@ -224,12 +224,12 @@ mod tests {
         assert!(!parse(r#""false""#).replace_all);
 
         // Absent field defaults to false
-        let p: EditParams = serde_json::from_str(r#"{"path":"f","old":"a","new":"b"}"#).unwrap();
+        let p: EditParams = serde_json::from_str(r#"{"path":"f","old_string":"a","new_string":"b"}"#).unwrap();
         assert!(!p.replace_all);
 
         // Invalid string is rejected
         let result: serde_json::Result<EditParams> =
-            serde_json::from_str(r#"{"path":"f","old":"a","new":"b","replace_all":"yes"}"#);
+            serde_json::from_str(r#"{"path":"f","old_string":"a","new_string":"b","replace_all":"yes"}"#);
         assert!(result.is_err());
     }
 }

@@ -5,6 +5,10 @@ Items we should address:
       Note: If the file has been modified by someone else than the agent since last read/write we should also block the write.
 - [ ] The write tool should also create intermediate directories if needed (and this should be said as part of the description).
 - [ ] Add support for limit to read tool (both bytes and and max lines), and optionnal offset parameter for large file (by lines or bytes?).
+- [ ] Add a search tool to find files by content (regex pattern matching across files, similar to grep/ripgrep).
+      Should support: pattern, optional path glob filter, and return matches with file path, line number, and surrounding context.
+- [ ] Add a glob tool to list files matching a pattern (e.g. `**/*.rs`, `src/**/*.ts`).
+      Without this, agents cannot discover which files exist without reading directories blindly.
 
 ## References:
 

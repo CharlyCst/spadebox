@@ -42,16 +42,16 @@ impl SpadeBox {
     pub async fn edit_file(
         &self,
         path: String,
-        old: String,
-        new: String,
+        old_string: String,
+        new_string: String,
         replace_all: Option<bool>,
     ) -> napi::Result<String> {
         EditFileTool::run(
             &self.inner,
             EditParams {
                 path,
-                old,
-                new,
+                old_string,
+                new_string,
                 replace_all: replace_all.unwrap_or(false),
             },
         )

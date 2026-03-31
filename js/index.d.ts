@@ -4,5 +4,5 @@ export declare class SpadeBox {
   constructor(root: string)
   readFile(path: string): Promise<string>
   writeFile(path: string, content: string): Promise<string>
-  editFile(path: string, old: string, new: string, replaceAll?: boolean | undefined | null): Promise<string>
+  editFile(path: string, oldString: string, newString: string, replaceAll?: boolean | undefined | null): Promise<string>
 }
