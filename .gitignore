@@ -2,3 +2,25 @@
 
 # Used for testing purpose
 /sandbox-test
+
+# Node / JS
+node_modules/
+*.node
+*.tsbuildinfo
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+coverage/
+.nyc_output
+*.tgz
+.env
+.env.test
+
+# napi-rs artifacts
+/js/npm
+/js/dist
+
+# Yarn Berry
+/js/.yarn/*
+/js/.pnp.*

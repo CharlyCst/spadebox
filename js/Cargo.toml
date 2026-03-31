@@ -1,0 +1,17 @@
+[package]
+authors = ["Charly Castes <charly.castes@epfl.ch>"]
+edition = "2024"
+name = "spadebox-js"
+version = "0.1.0"
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+napi = { version = "3", features = ["tokio_rt"] }
+napi-derive = "3"
+spadebox-core = { path = "../crates/spadebox-core" }
+tokio = { workspace = true }
+
+[build-dependencies]
+napi-build = "2"

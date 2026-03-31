@@ -2,6 +2,7 @@
 members = [
     "crates/spadebox-core",
     "crates/spadebox-mcp",
+    "js",
 ]
 resolver = "2"
 
@@ -11,3 +12,7 @@ thiserror = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 schemars = "1"
+
+[profile.release]
+lto = true
+strip = "symbols"
