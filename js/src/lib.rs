@@ -3,6 +3,7 @@
 use napi_derive::napi;
 use spadebox_core::{
     Sandbox,
+    grep::{GrepParams, GrepTool},
     tools::{EditFileTool, EditParams, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams},
 };
 
@@ -36,6 +37,25 @@ impl SpadeBox {
         WriteFileTool::run(&self.inner, WriteParams { path, content })
             .await
             .map_err(to_napi_err)
+    }
+
+    #[napi]
+    pub async fn grep(
+        &self,
+        pattern: String,
+        glob: Option<String>,
+        context_lines: Option<u32>,
+    ) -> napi::Result<String> {
+        GrepTool::run(
+            &self.inner,
+            GrepParams {
+                pattern,
+                glob,
+                context_lines: context_lines.unwrap_or(0),
+            },
+        )
+        .await
+        .map_err(to_napi_err)
     }
 
     #[napi]

@@ -11,6 +11,7 @@ use rmcp::{
 };
 use spadebox_core::{
     Sandbox, Tool,
+    grep::GrepTool,
     tools::{EditFileTool, ReadFileTool, WriteFileTool},
 };
 
@@ -51,6 +52,7 @@ impl ServerHandler for SpadeboxMcpServer {
                 mcp_tool::<ReadFileTool>(),
                 mcp_tool::<WriteFileTool>(),
                 mcp_tool::<EditFileTool>(),
+                mcp_tool::<GrepTool>(),
             ],
             ..Default::default()
         })
@@ -78,6 +80,11 @@ impl ServerHandler for SpadeboxMcpServer {
                 let params = serde_json::from_value(args)
                     .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
                 EditFileTool::run(&self.sandbox, params).await
+            }
+            GrepTool::NAME => {
+                let params = serde_json::from_value(args)
+                    .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
+                GrepTool::run(&self.sandbox, params).await
             }
             name => {
                 return Err(McpError::invalid_params(

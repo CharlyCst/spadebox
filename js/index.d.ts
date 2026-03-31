@@ -4,5 +4,6 @@ export declare class SpadeBox {
   constructor(root: string)
   readFile(path: string): Promise<string>
   writeFile(path: string, content: string): Promise<string>
+  grep(pattern: string, glob?: string | undefined | null, contextLines?: number | undefined | null): Promise<string>
   editFile(path: string, oldString: string, newString: string, replaceAll?: boolean | undefined | null): Promise<string>
 }

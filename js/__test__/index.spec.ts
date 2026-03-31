@@ -51,6 +51,47 @@ test('read_file throws on missing file', async (t) => {
   })
 })
 
+test('grep finds matching lines with file and line number', async (t) => {
+  await withTmpDir(async (dir) => {
+    const sb = new SpadeBox(dir)
+    await sb.writeFile('src.ts', 'const x = 1\nconst y = 2\nconst z = 3\n')
+    const result = await sb.grep('const y')
+    t.regex(result, /src\.ts:2: const y = 2/)
+    t.false(result.includes('const x'))
+  })
+})
+
+test('grep glob restricts search to matching files', async (t) => {
+  await withTmpDir(async (dir) => {
+    const sb = new SpadeBox(dir)
+    await sb.writeFile('code.ts', 'const needle = 1\n')
+    await sb.writeFile('note.txt', 'const needle = 1\n')
+    const result = await sb.grep('needle', '**/*.ts')
+    t.true(result.includes('code.ts'))
+    t.false(result.includes('note.txt'))
+  })
+})
+
+test('grep returns no-matches message when nothing found', async (t) => {
+  await withTmpDir(async (dir) => {
+    const sb = new SpadeBox(dir)
+    await sb.writeFile('file.txt', 'nothing here\n')
+    const result = await sb.grep('xyzzy')
+    t.is(result, 'No matches found.')
+  })
+})
+
+test('grep context_lines includes surrounding lines', async (t) => {
+  await withTmpDir(async (dir) => {
+    const sb = new SpadeBox(dir)
+    await sb.writeFile('ctx.txt', 'before\nMATCH\nafter\n')
+    const result = await sb.grep('MATCH', undefined, 1)
+    t.regex(result, /2: MATCH/)
+    t.regex(result, /1- before/)
+    t.regex(result, /3- after/)
+  })
+})
+
 test('path traversal is rejected', async (t) => {
   await withTmpDir(async (dir) => {
     const sb = new SpadeBox(dir)
