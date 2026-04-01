@@ -15,3 +15,4 @@ Check the following implementation:
 - Codex
 - Pi Agent
 - Goose
+- Claude Code (see https://ccunpacked.dev/)
