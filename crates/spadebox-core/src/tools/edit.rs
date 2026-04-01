@@ -4,24 +4,7 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
 
-use super::Tool;
-
-/// Accepts both JSON booleans (`true`) and strings (`"true"`/`"false"`).
-/// MCP clients such as Claude Code may serialize booleans as strings.
-fn deserialize_bool_flexible<'de, D: serde::Deserializer<'de>>(
-    d: D,
-) -> std::result::Result<bool, D::Error> {
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum BoolOrString {
-        Bool(bool),
-        Str(String),
-    }
-    match BoolOrString::deserialize(d)? {
-        BoolOrString::Bool(b) => Ok(b),
-        BoolOrString::Str(s) => s.parse().map_err(serde::de::Error::custom),
-    }
-}
+use super::{deserialize_bool_flexible, Tool};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct EditParams {

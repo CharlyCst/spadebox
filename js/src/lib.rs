@@ -32,10 +32,22 @@ impl SpadeBox {
     }
 
     #[napi]
-    pub async fn write_file(&self, path: String, content: String) -> napi::Result<String> {
-        WriteFileTool::run(&self.inner, WriteParams { path, content })
-            .await
-            .map_err(to_napi_err)
+    pub async fn write_file(
+        &self,
+        path: String,
+        content: Option<String>,
+        create_dirs: Option<bool>,
+    ) -> napi::Result<String> {
+        WriteFileTool::run(
+            &self.inner,
+            WriteParams {
+                path,
+                content: content.unwrap_or_default(),
+                create_dirs: create_dirs.unwrap_or(false),
+            },
+        )
+        .await
+        .map_err(to_napi_err)
     }
 
     #[napi]

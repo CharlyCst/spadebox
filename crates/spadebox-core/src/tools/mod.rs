@@ -41,3 +41,20 @@ pub trait Tool {
         params: Self::Params,
     ) -> impl std::future::Future<Output = Result<String>> + Send;
 }
+
+/// Deserializes a boolean that may arrive as a JSON bool or as a string.
+/// MCP clients such as Claude Code may serialize booleans as strings (`"true"`).
+pub(super) fn deserialize_bool_flexible<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<bool, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BoolOrString {
+        Bool(bool),
+        Str(String),
+    }
+    match BoolOrString::deserialize(d)? {
+        BoolOrString::Bool(b) => Ok(b),
+        BoolOrString::Str(s) => s.parse().map_err(serde::de::Error::custom),
+    }
+}
