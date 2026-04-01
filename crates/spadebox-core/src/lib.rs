@@ -1,5 +1,4 @@
 mod error;
-pub mod grep;
 mod sandbox;
 pub mod tools;
 

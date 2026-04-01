@@ -11,8 +11,7 @@ use rmcp::{
 };
 use spadebox_core::{
     Sandbox, Tool,
-    grep::GrepTool,
-    tools::{EditFileTool, ReadFileTool, WriteFileTool},
+    tools::{EditFileTool, GrepTool, ReadFileTool, WriteFileTool},
 };
 
 #[derive(Clone)]

@@ -3,8 +3,7 @@
 use napi_derive::napi;
 use spadebox_core::{
     Sandbox,
-    grep::{GrepParams, GrepTool},
-    tools::{EditFileTool, EditParams, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams},
+    tools::{EditFileTool, EditParams, GrepParams, GrepTool, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams},
 };
 
 fn to_napi_err(e: spadebox_core::SpadeboxError) -> napi::Error {

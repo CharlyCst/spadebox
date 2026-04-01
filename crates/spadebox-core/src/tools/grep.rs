@@ -28,7 +28,9 @@ use grep_searcher::{Searcher, SearcherBuilder, Sink, SinkContext, SinkContextKin
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, tools::Tool, Result, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
+
+use super::Tool;
 
 // ---------------------------------------------------------------------------
 // Parameters
@@ -59,7 +61,7 @@ impl Tool for GrepTool {
     type Params = GrepParams;
     const NAME: &'static str = "grep";
     const DESCRIPTION: &'static str = "\
-        Search file contents for a regex pattern. \
+        Search file contents for a regex pattern (ripgrep). \
         Returns matching lines with their file path and line number. \
         Use 'glob' to restrict the search to specific file types (e.g. '**/*.rs'). \
         Use 'context_lines' to include N surrounding lines around each match.";
