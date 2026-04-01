@@ -8,6 +8,10 @@ Items we should address:
 - [ ] Add a glob tool to list files matching a pattern (e.g. `**/*.rs`, `src/**/*.ts`).
       Without this, agents cannot discover which files exist without reading directories blindly.
 
+Code maintenance:
+- [ ] Write unit tests for each tools using tempfile
+- [ ] Comment code in all toos, like for the grep tool
+
 ## References:
 
 Check the following implementation:
