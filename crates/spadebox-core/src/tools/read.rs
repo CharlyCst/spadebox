@@ -1,6 +1,7 @@
+use std::io::{self, Read};
+
 use schemars::JsonSchema;
 use serde::Deserialize;
-use tokio::io::AsyncReadExt;
 
 use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
 
@@ -22,16 +23,90 @@ impl Tool for ReadFileTool {
          Returns the file's content as a UTF-8 string.";
 
     async fn run(sandbox: &Sandbox, params: ReadParams) -> Result<String> {
-        let file = sandbox
-            .root
-            .open(&params.path)
-            .map_err(|e| map_io_err(&params.path, e))?;
-        let mut tokio_file = tokio::fs::File::from_std(file.into_std());
-        let mut buf = Vec::new();
-        tokio_file
-            .read_to_end(&mut buf)
+        // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
+        //
+        // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
+        // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
+        // original — all cap-std invariants are preserved across the clone.
+        let root = sandbox.root.try_clone().map_err(SpadeboxError::IoError)?;
+
+        // open() and read_to_end() are both blocking syscalls. Run them on a
+        // dedicated thread to avoid stalling the async executor.
+        tokio::task::spawn_blocking(move || {
+            // SANDBOX: fd-relative open enforced by cap-std / RESOLVE_BENEATH.
+            let mut file = root
+                .open(&params.path)
+                .map_err(|e| map_io_err(&params.path, e))?;
+
+            // `cap_std::fs::File` implements `std::io::Read` by calling the
+            // `read` syscall on the already-open file descriptor. No path
+            // resolution occurs here — the sandbox guarantee was established
+            // at `open()` time above.
+            let mut buf = Vec::new();
+            file.read_to_end(&mut buf).map_err(SpadeboxError::IoError)?;
+            Ok(String::from_utf8_lossy(&buf).into_owned())
+        })
+        .await
+        .map_err(|e| SpadeboxError::IoError(io::Error::other(e)))?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::Sandbox;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn setup() -> (TempDir, Sandbox) {
+        let dir = TempDir::new().unwrap();
+        let sandbox = Sandbox::new(dir.path()).unwrap();
+        (dir, sandbox)
+    }
+
+    #[tokio::test]
+    async fn reads_file_content() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("hello.txt"), "hello world").unwrap();
+
+        let result = ReadFileTool::run(&sandbox, ReadParams { path: "hello.txt".into() })
             .await
-            .map_err(SpadeboxError::IoError)?;
-        Ok(String::from_utf8_lossy(&buf).into_owned())
+            .unwrap();
+
+        assert_eq!(result, "hello world");
+    }
+
+    #[tokio::test]
+    async fn reads_file_in_subdirectory() {
+        let (dir, sandbox) = setup();
+        fs::create_dir(dir.path().join("sub")).unwrap();
+        fs::write(dir.path().join("sub/file.txt"), "nested").unwrap();
+
+        let result = ReadFileTool::run(&sandbox, ReadParams { path: "sub/file.txt".into() })
+            .await
+            .unwrap();
+
+        assert_eq!(result, "nested");
+    }
+
+    #[tokio::test]
+    async fn errors_on_missing_file() {
+        let (_dir, sandbox) = setup();
+
+        let result = ReadFileTool::run(&sandbox, ReadParams { path: "nope.txt".into() }).await;
+
+        assert!(matches!(result, Err(SpadeboxError::NotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn rejects_path_traversal() {
+        let (_dir, sandbox) = setup();
+
+        let result = ReadFileTool::run(&sandbox, ReadParams { path: "../etc/passwd".into() }).await;
+
+        assert!(matches!(
+            result,
+            Err(SpadeboxError::EscapeAttempt(_) | SpadeboxError::PermissionDenied(_))
+        ));
     }
 }

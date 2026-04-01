@@ -1,6 +1,7 @@
+use std::io::{self, Read, Write};
+
 use schemars::JsonSchema;
 use serde::Deserialize;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
 
 use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
 
@@ -32,59 +33,147 @@ impl Tool for EditFileTool {
          Always read the file before editing to ensure 'old_string' matches the current content exactly.";
 
     async fn run(sandbox: &Sandbox, params: EditParams) -> Result<String> {
-        // Read
-        let file = sandbox
-            .root
-            .open(&params.path)
-            .map_err(|e| map_io_err(&params.path, e))?;
-        let mut tokio_file = tokio::fs::File::from_std(file.into_std());
-        let mut buf = Vec::new();
-        tokio_file
-            .read_to_end(&mut buf)
+        // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
+        //
+        // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
+        // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
+        // original — all cap-std invariants are preserved across the clone.
+        let root = sandbox.root.try_clone().map_err(SpadeboxError::IoError)?;
+
+        // open(), read_to_end(), create(), and write_all() are all blocking
+        // syscalls. Run them on a dedicated thread to avoid stalling the executor.
+        tokio::task::spawn_blocking(move || do_edit(root, params))
             .await
-            .map_err(SpadeboxError::IoError)?;
-        let content =
-            String::from_utf8(buf).map_err(|_| SpadeboxError::NotUtf8(params.path.clone()))?;
-
-        // Validate
-        let count = content.matches(params.old_string.as_str()).count();
-        match count {
-            0 => return Err(SpadeboxError::StringNotFound(params.path.clone())),
-            n if n > 1 && !params.replace_all => {
-                return Err(SpadeboxError::AmbiguousEdit {
-                    path: params.path.clone(),
-                    count: n,
-                });
-            }
-            _ => {}
-        }
-
-        // Replace and write back
-        let updated = if params.replace_all {
-            content.replace(params.old_string.as_str(), &params.new_string)
-        } else {
-            content.replacen(params.old_string.as_str(), &params.new_string, 1)
-        };
-        let file = sandbox
-            .root
-            .create(&params.path)
-            .map_err(|e| map_io_err(&params.path, e))?;
-        let mut tokio_file = tokio::fs::File::from_std(file.into_std());
-        tokio_file
-            .write_all(updated.as_bytes())
-            .await
-            .map_err(SpadeboxError::IoError)?;
-
-        let replacements = if params.replace_all { count } else { 1 };
-        Ok(format!(
-            "Replaced {} occurrence(s) in '{}'",
-            replacements, params.path
-        ))
+            .map_err(|e| SpadeboxError::IoError(io::Error::other(e)))?
     }
+}
+
+fn do_edit(root: cap_std::fs::Dir, params: EditParams) -> Result<String> {
+    // SANDBOX: fd-relative open enforced by cap-std / RESOLVE_BENEATH.
+    let mut file = root
+        .open(&params.path)
+        .map_err(|e| map_io_err(&params.path, e))?;
+
+    // `cap_std::fs::File` implements `std::io::Read` by calling the `read`
+    // syscall on the already-open file descriptor. No path resolution occurs —
+    // the sandbox guarantee was established at `open()` time above.
+    let mut buf = Vec::new();
+    file.read_to_end(&mut buf)
+        .map_err(SpadeboxError::IoError)?;
+    let content =
+        String::from_utf8(buf).map_err(|_| SpadeboxError::NotUtf8(params.path.clone()))?;
+
+    // Validate — pure in-memory string operations, no filesystem access.
+    let count = content.matches(params.old_string.as_str()).count();
+    match count {
+        0 => return Err(SpadeboxError::StringNotFound(params.path.clone())),
+        n if n > 1 && !params.replace_all => {
+            return Err(SpadeboxError::AmbiguousEdit {
+                path: params.path.clone(),
+                count: n,
+            });
+        }
+        _ => {}
+    }
+
+    // Replace — pure in-memory, no filesystem access.
+    let updated = if params.replace_all {
+        content.replace(params.old_string.as_str(), &params.new_string)
+    } else {
+        content.replacen(params.old_string.as_str(), &params.new_string, 1)
+    };
+
+    // SANDBOX: fd-relative create enforced by cap-std / RESOLVE_BENEATH.
+    let mut file = root
+        .create(&params.path)
+        .map_err(|e| map_io_err(&params.path, e))?;
+
+    // `cap_std::fs::File` implements `std::io::Write` by calling the `write`
+    // syscall on the already-open file descriptor. No path resolution occurs —
+    // the sandbox guarantee was established at `create()` time above.
+    file.write_all(updated.as_bytes())
+        .map_err(SpadeboxError::IoError)?;
+
+    let replacements = if params.replace_all { count } else { 1 };
+    Ok(format!(
+        "Replaced {} occurrence(s) in '{}'",
+        replacements, params.path
+    ))
 }
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::Sandbox;
+    use std::fs;
+    use tempfile::TempDir;
+
+    fn setup() -> (TempDir, Sandbox) {
+        let dir = TempDir::new().unwrap();
+        let sandbox = Sandbox::new(dir.path()).unwrap();
+        (dir, sandbox)
+    }
+
+    #[tokio::test]
+    async fn replaces_string() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("f.txt"), "hello world").unwrap();
+
+        EditFileTool::run(&sandbox, EditParams {
+            path: "f.txt".into(),
+            old_string: "world".into(),
+            new_string: "rust".into(),
+            replace_all: false,
+        }).await.unwrap();
+
+        assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "hello rust");
+    }
+
+    #[tokio::test]
+    async fn replace_all_replaces_every_occurrence() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("f.txt"), "a a a").unwrap();
+
+        EditFileTool::run(&sandbox, EditParams {
+            path: "f.txt".into(),
+            old_string: "a".into(),
+            new_string: "b".into(),
+            replace_all: true,
+        }).await.unwrap();
+
+        assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "b b b");
+    }
+
+    #[tokio::test]
+    async fn errors_on_ambiguous_match() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("f.txt"), "a a").unwrap();
+
+        let result = EditFileTool::run(&sandbox, EditParams {
+            path: "f.txt".into(),
+            old_string: "a".into(),
+            new_string: "b".into(),
+            replace_all: false,
+        }).await;
+
+        assert!(matches!(result, Err(SpadeboxError::AmbiguousEdit { .. })));
+    }
+
+    #[tokio::test]
+    async fn errors_on_string_not_found() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("f.txt"), "hello").unwrap();
+
+        let result = EditFileTool::run(&sandbox, EditParams {
+            path: "f.txt".into(),
+            old_string: "xyzzy".into(),
+            new_string: "b".into(),
+            replace_all: false,
+        }).await;
+
+        assert!(matches!(result, Err(SpadeboxError::StringNotFound(_))));
+    }
+
     use super::EditParams;
 
     #[test]
