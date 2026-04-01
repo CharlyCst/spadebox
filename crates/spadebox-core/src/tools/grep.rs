@@ -264,7 +264,7 @@ impl Sink for MatchSink<'_> {
 
         let content = String::from_utf8_lossy(mat.bytes());
         self.out
-            .push(format!("{}:{}: {}", self.path, line_no, content.trim_end()));
+            .push(format!("{}:{}:{}", self.path, line_no, content.trim_end()));
         self.last_line = Some(line_no);
 
         Ok(true) // returning false would stop searching this file
@@ -285,7 +285,7 @@ impl Sink for MatchSink<'_> {
 
         let content = String::from_utf8_lossy(ctx.bytes());
         self.out
-            .push(format!("{}:{}- {}", self.path, line_no, content.trim_end()));
+            .push(format!("{}:{}-{}", self.path, line_no, content.trim_end()));
         self.last_line = Some(line_no);
 
         Ok(true)
@@ -354,7 +354,7 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(result.contains("a.txt:1: hello world"), "got: {result}");
+        assert!(result.contains("a.txt:1:hello world"), "got: {result}");
         assert!(!result.contains("goodbye"), "got: {result}");
     }
 
@@ -418,9 +418,9 @@ mod tests {
         .await
         .unwrap();
 
-        assert!(result.contains("3: MATCH"), "got: {result}");
-        assert!(result.contains("2- line two"), "got: {result}");
-        assert!(result.contains("4- line four"), "got: {result}");
+        assert!(result.contains("3:MATCH"), "got: {result}");
+        assert!(result.contains("2-line two"), "got: {result}");
+        assert!(result.contains("4-line four"), "got: {result}");
     }
 
     #[tokio::test]
