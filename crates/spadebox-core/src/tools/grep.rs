@@ -1,28 +1,26 @@
 //! Grep tool — sandboxed regex search across files.
 //!
+//! Directory traversal and glob filtering are provided by [`super::glob::walk`]
+//! and [`super::glob::build_glob_set`]. This module is responsible only for
+//! opening each matched file and searching its content.
+//!
 //! # Sandbox safety
 //!
-//! All filesystem access in this module goes through [`cap_std::fs::Dir`].
-//! `Dir` methods (`read_dir`, `open_dir`, `open`) internally use `openat2` with
-//! the `RESOLVE_BENEATH` flag on Linux 5.6+, which causes the kernel to reject
-//! any path component that would escape the sandbox root — including symlinks,
-//! `..` components, and absolute paths. On older kernels and macOS, cap-std's
-//! userspace resolver enforces the same invariant.
+//! All filesystem access goes through [`cap_std::fs::Dir`]. The shared walker
+//! in [`super::glob`] uses only fd-relative `read_dir` / `open_dir` calls
+//! (enforced via `openat2` with `RESOLVE_BENEATH` on Linux 5.6+), so no path
+//! component can escape the sandbox root. File opens in this module use
+//! `dir.open(name)` where `dir` and `name` come directly from the walker's
+//! callback — also fd-relative and sandbox-enforced.
 //!
 //! This module deliberately avoids `std::fs`, PathBuf-based opens, and the
-//! `ignore` crate's directory walker (which resolves paths through ambient
-//! `std::fs` internally, bypassing cap-std). The only path strings here are
-//! relative strings accumulated for *display purposes only* — they are never
-//! passed to any function that opens a file descriptor.
-//!
-//! The glob pattern and regex pattern are matched against plain strings /
-//! compiled byte slices respectively. Neither can influence which file
-//! descriptors are opened; all fd resolution is handled by cap-std.
+//! `ignore` crate's directory walker (which uses ambient `std::fs` paths
+//! internally, bypassing cap-std). The regex pattern operates on already-opened
+//! file descriptors and cannot influence which files are opened.
 
 use std::io;
 
 use cap_std::fs::Dir;
-use globset::{Glob, GlobSet, GlobSetBuilder};
 use grep_regex::RegexMatcher;
 use grep_searcher::{Searcher, SearcherBuilder, Sink, SinkContext, SinkContextKind, SinkMatch};
 use schemars::JsonSchema;
@@ -30,7 +28,7 @@ use serde::Deserialize;
 
 use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
 
-use super::Tool;
+use super::{glob::build_glob_set, glob::walk, Tool};
 
 // ---------------------------------------------------------------------------
 // Parameters
@@ -92,7 +90,9 @@ impl Tool for GrepTool {
         // a dedicated blocking thread to avoid stalling the async executor.
         let output = tokio::task::spawn_blocking(move || {
             let mut lines: Vec<String> = Vec::new();
-            walk(&root, "", &matcher, &glob_set, context_lines, &mut lines)?;
+            walk(&root, "", &glob_set, &mut |dir, name, display_path| {
+                search_file(dir, name, display_path, &matcher, context_lines, &mut lines)
+            })?;
             Ok::<String, SpadeboxError>(format_output(&lines))
         })
         .await
@@ -100,75 +100,6 @@ impl Tool for GrepTool {
 
         Ok(output)
     }
-}
-
-// ---------------------------------------------------------------------------
-// Directory walker
-// ---------------------------------------------------------------------------
-
-/// Recursively walks `dir`, searching every file whose relative display path
-/// matches `glob_set` for lines matching `matcher`.
-///
-/// # Sandbox safety
-///
-/// - `dir.read_dir(".")` lists entries of the *already-open* directory fd.
-///   The `"."` argument is resolved relative to that fd by the kernel — no
-///   ambient path lookup can reach outside `dir`.
-/// - `dir.open_dir(name)` opens a subdirectory by entry name, fd-relative.
-///   cap-std enforces `RESOLVE_BENEATH` so `.`, `..`, symlinks pointing
-///   outside the jail, and absolute components are all rejected.
-/// - `dir.open(name)` opens a file by entry name under the same constraints.
-/// - `rel_path` / `child_rel` are display-only strings. They are assembled
-///   from `DirEntry::file_name()` values and are **never** passed to any
-///   function that resolves a path into a file descriptor.
-fn walk(
-    dir: &Dir,
-    rel_path: &str,
-    matcher: &RegexMatcher,
-    glob_set: &GlobSet,
-    context_lines: usize,
-    out: &mut Vec<String>,
-) -> Result<()> {
-    // `read_dir(".")` enumerates entries of the already-open `dir` fd.
-    // SANDBOX: resolved fd-relative; no ambient filesystem lookup.
-    let entries = dir
-        .read_dir(".")
-        .map_err(|e| map_io_err(rel_path, e))?;
-
-    for entry in entries {
-        let entry = entry.map_err(SpadeboxError::IoError)?;
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-
-        // Build the display path (forward-slash separated, relative to root).
-        // Used only for output formatting and glob matching — never for opens.
-        let child_rel = if rel_path.is_empty() {
-            name_str.to_string()
-        } else {
-            format!("{}/{}", rel_path, name_str)
-        };
-
-        let file_type = entry.file_type().map_err(SpadeboxError::IoError)?;
-
-        if file_type.is_dir() {
-            // SANDBOX: `open_dir` is fd-relative and enforces `RESOLVE_BENEATH`.
-            // A symlink pointing outside the sandbox root or a `..` component
-            // will be rejected by the kernel before we ever recurse.
-            let sub_dir = dir
-                .open_dir(name_str.as_ref())
-                .map_err(|e| map_io_err(&child_rel, e))?;
-            walk(&sub_dir, &child_rel, matcher, glob_set, context_lines, out)?;
-        } else if file_type.is_file() {
-            // Apply the glob filter — pure string match, no filesystem access.
-            if glob_set.is_match(&child_rel) {
-                search_file(dir, name_str.as_ref(), &child_rel, matcher, context_lines, out)?;
-            }
-        }
-        // Symlinks that resolve to neither file nor dir (broken links),
-        // sockets, and device nodes are silently skipped.
-    }
-
-    Ok(())
 }
 
 // ---------------------------------------------------------------------------
@@ -296,23 +227,6 @@ impl Sink for MatchSink<'_> {
 // Helpers
 // ---------------------------------------------------------------------------
 
-/// Compiles an optional glob pattern string into a [`GlobSet`].
-///
-/// When `glob` is `None`, returns a set that matches every file (`**/*`).
-/// The set is matched against relative display paths (e.g. `"src/main.rs"`)
-/// as plain string comparisons — no filesystem access is performed.
-fn build_glob_set(glob: Option<&str>) -> Result<GlobSet> {
-    let mut builder = GlobSetBuilder::new();
-    let pattern = glob.unwrap_or("**/*");
-    builder.add(
-        Glob::new(pattern).map_err(|e| SpadeboxError::InvalidPattern(e.to_string()))?,
-    );
-    builder
-        .build()
-        .map_err(|e| SpadeboxError::InvalidPattern(e.to_string()))
-}
-
-/// Formats collected match lines into the final output string.
 fn format_output(lines: &[String]) -> String {
     if lines.is_empty() {
         "No matches found.".to_string()

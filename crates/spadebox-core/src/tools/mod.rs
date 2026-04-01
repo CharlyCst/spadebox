@@ -4,11 +4,13 @@ use serde::Deserialize;
 use crate::{Result, Sandbox};
 
 mod edit;
+mod glob;
 mod grep;
 mod read;
 mod write;
 
 pub use edit::{EditFileTool, EditParams};
+pub use glob::{GlobParams, GlobTool};
 pub use grep::{GrepParams, GrepTool};
 pub use read::{ReadFileTool, ReadParams};
 pub use write::{WriteFileTool, WriteParams};

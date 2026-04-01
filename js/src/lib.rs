@@ -3,7 +3,7 @@
 use napi_derive::napi;
 use spadebox_core::{
     Sandbox,
-    tools::{EditFileTool, EditParams, GrepParams, GrepTool, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams},
+    tools::{EditFileTool, EditParams, GlobParams, GlobTool, GrepParams, GrepTool, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams},
 };
 
 fn to_napi_err(e: spadebox_core::SpadeboxError) -> napi::Error {
@@ -34,6 +34,13 @@ impl SpadeBox {
     #[napi]
     pub async fn write_file(&self, path: String, content: String) -> napi::Result<String> {
         WriteFileTool::run(&self.inner, WriteParams { path, content })
+            .await
+            .map_err(to_napi_err)
+    }
+
+    #[napi]
+    pub async fn glob(&self, pattern: String) -> napi::Result<String> {
+        GlobTool::run(&self.inner, GlobParams { pattern })
             .await
             .map_err(to_napi_err)
     }
