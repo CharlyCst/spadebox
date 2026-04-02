@@ -26,7 +26,7 @@ use grep_searcher::{Searcher, SearcherBuilder, Sink, SinkContext, SinkContextKin
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
 
 use super::{glob::build_glob_set, glob::walk, Tool};
 
@@ -68,7 +68,7 @@ impl Tool for GrepTool {
         // Compile the regex eagerly on the calling thread so we can return a
         // structured error before touching the filesystem.
         let matcher = RegexMatcher::new(&params.pattern)
-            .map_err(|e| SpadeboxError::InvalidPattern(e.to_string()))?;
+            .map_err(|e| ToolError::InvalidPattern(e.to_string()))?;
 
         // Build the glob set used for file-path filtering.
         // This is a pure string → DFA compilation step — no filesystem access.
@@ -82,7 +82,7 @@ impl Tool for GrepTool {
         let root = sandbox
             .root
             .try_clone()
-            .map_err(SpadeboxError::IoError)?;
+            .map_err(ToolError::IoError)?;
 
         let context_lines = params.context_lines as usize;
 
@@ -93,10 +93,10 @@ impl Tool for GrepTool {
             walk(&root, "", &glob_set, &mut |dir, name, display_path| {
                 search_file(dir, name, display_path, &matcher, context_lines, &mut lines)
             })?;
-            Ok::<String, SpadeboxError>(format_output(&lines))
+            Ok::<String, ToolError>(format_output(&lines))
         })
         .await
-        .map_err(|e| SpadeboxError::IoError(io::Error::other(e)))??;
+        .map_err(|e| ToolError::IoError(io::Error::other(e)))??;
 
         Ok(output)
     }
@@ -149,7 +149,7 @@ fn search_file(
 
     searcher
         .search_reader(matcher, std_file, &mut sink)
-        .map_err(SpadeboxError::IoError)
+        .map_err(ToolError::IoError)
 }
 
 // ---------------------------------------------------------------------------
@@ -350,7 +350,7 @@ mod tests {
         )
         .await;
 
-        assert!(matches!(result, Err(SpadeboxError::InvalidPattern(_))));
+        assert!(matches!(result, Err(ToolError::InvalidPattern(_))));
     }
 
     #[tokio::test]

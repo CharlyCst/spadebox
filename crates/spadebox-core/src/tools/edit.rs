@@ -3,7 +3,7 @@ use std::io::{self, Read, Write};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
 
 use super::{deserialize_bool_flexible, Tool};
 
@@ -38,13 +38,13 @@ impl Tool for EditFileTool {
         // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
         // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
         // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox.root.try_clone().map_err(SpadeboxError::IoError)?;
+        let root = sandbox.root.try_clone().map_err(ToolError::IoError)?;
 
         // open(), read_to_end(), create(), and write_all() are all blocking
         // syscalls. Run them on a dedicated thread to avoid stalling the executor.
         tokio::task::spawn_blocking(move || do_edit(root, params))
             .await
-            .map_err(|e| SpadeboxError::IoError(io::Error::other(e)))?
+            .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }
 }
 
@@ -59,16 +59,16 @@ fn do_edit(root: cap_std::fs::Dir, params: EditParams) -> ToolResult<String> {
     // the sandbox guarantee was established at `open()` time above.
     let mut buf = Vec::new();
     file.read_to_end(&mut buf)
-        .map_err(SpadeboxError::IoError)?;
+        .map_err(ToolError::IoError)?;
     let content =
-        String::from_utf8(buf).map_err(|_| SpadeboxError::NotUtf8(params.path.clone()))?;
+        String::from_utf8(buf).map_err(|_| ToolError::NotUtf8(params.path.clone()))?;
 
     // Validate — pure in-memory string operations, no filesystem access.
     let count = content.matches(params.old_string.as_str()).count();
     match count {
-        0 => return Err(SpadeboxError::StringNotFound(params.path.clone())),
+        0 => return Err(ToolError::StringNotFound(params.path.clone())),
         n if n > 1 && !params.replace_all => {
-            return Err(SpadeboxError::AmbiguousEdit {
+            return Err(ToolError::AmbiguousEdit {
                 path: params.path.clone(),
                 count: n,
             });
@@ -92,7 +92,7 @@ fn do_edit(root: cap_std::fs::Dir, params: EditParams) -> ToolResult<String> {
     // syscall on the already-open file descriptor. No path resolution occurs —
     // the sandbox guarantee was established at `create()` time above.
     file.write_all(updated.as_bytes())
-        .map_err(SpadeboxError::IoError)?;
+        .map_err(ToolError::IoError)?;
 
     let replacements = if params.replace_all { count } else { 1 };
     Ok(format!(
@@ -156,7 +156,7 @@ mod tests {
             replace_all: false,
         }).await;
 
-        assert!(matches!(result, Err(SpadeboxError::AmbiguousEdit { .. })));
+        assert!(matches!(result, Err(ToolError::AmbiguousEdit { .. })));
     }
 
     #[tokio::test]
@@ -171,7 +171,7 @@ mod tests {
             replace_all: false,
         }).await;
 
-        assert!(matches!(result, Err(SpadeboxError::StringNotFound(_))));
+        assert!(matches!(result, Err(ToolError::StringNotFound(_))));
     }
 
     use super::EditParams;

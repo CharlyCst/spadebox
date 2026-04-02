@@ -25,7 +25,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
 
 use super::Tool;
 
@@ -69,7 +69,7 @@ where
         .map_err(|e| map_io_err(rel_path, e))?;
 
     for entry in entries {
-        let entry = entry.map_err(SpadeboxError::IoError)?;
+        let entry = entry.map_err(ToolError::IoError)?;
         let name = entry.file_name();
         let name_str = name.to_string_lossy();
 
@@ -81,7 +81,7 @@ where
             format!("{}/{}", rel_path, name_str)
         };
 
-        let file_type = entry.file_type().map_err(SpadeboxError::IoError)?;
+        let file_type = entry.file_type().map_err(ToolError::IoError)?;
 
         if file_type.is_dir() {
             // SANDBOX: `open_dir` is fd-relative and enforces `RESOLVE_BENEATH`.
@@ -112,11 +112,11 @@ pub(super) fn build_glob_set(glob: Option<&str>) -> ToolResult<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     let pattern = glob.unwrap_or("**/*");
     builder.add(
-        Glob::new(pattern).map_err(|e| SpadeboxError::InvalidPattern(e.to_string()))?,
+        Glob::new(pattern).map_err(|e| ToolError::InvalidPattern(e.to_string()))?,
     );
     builder
         .build()
-        .map_err(|e| SpadeboxError::InvalidPattern(e.to_string()))
+        .map_err(|e| ToolError::InvalidPattern(e.to_string()))
 }
 
 // ---------------------------------------------------------------------------
@@ -158,7 +158,7 @@ impl Tool for GlobTool {
         let root = sandbox
             .root
             .try_clone()
-            .map_err(SpadeboxError::IoError)?;
+            .map_err(ToolError::IoError)?;
 
         // Directory walking is synchronous. Run on a dedicated blocking thread
         // to avoid stalling the async executor.
@@ -172,10 +172,10 @@ impl Tool for GlobTool {
             })?;
 
             paths.sort();
-            Ok::<String, SpadeboxError>(format_output(&paths))
+            Ok::<String, ToolError>(format_output(&paths))
         })
         .await
-        .map_err(|e| SpadeboxError::IoError(io::Error::other(e)))??;
+        .map_err(|e| ToolError::IoError(io::Error::other(e)))??;
 
         Ok(output)
     }
@@ -274,6 +274,6 @@ mod tests {
         let result = GlobTool::run(&sandbox, GlobParams { pattern: "[invalid".to_string() })
             .await;
 
-        assert!(matches!(result, Err(SpadeboxError::InvalidPattern(_))));
+        assert!(matches!(result, Err(ToolError::InvalidPattern(_))));
     }
 }

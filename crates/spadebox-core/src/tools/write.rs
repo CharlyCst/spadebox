@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
 
 use super::{deserialize_bool_flexible, Tool};
 
@@ -40,14 +40,14 @@ impl Tool for WriteFileTool {
         // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
         // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
         // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox.root.try_clone().map_err(SpadeboxError::IoError)?;
+        let root = sandbox.root.try_clone().map_err(ToolError::IoError)?;
 
         // All filesystem operations (create_dir_all, create, write_all) are
         // blocking syscalls. Run them on a dedicated thread to avoid stalling
         // the async executor.
         tokio::task::spawn_blocking(move || do_write(root, params))
             .await
-            .map_err(|e| SpadeboxError::IoError(io::Error::other(e)))?
+            .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }
 }
 
@@ -82,7 +82,7 @@ fn do_write(root: cap_std::fs::Dir, params: WriteParams) -> ToolResult<String> {
         .create(&params.path)
         .map_err(|e| map_io_err(&params.path, e))?;
     file.write_all(params.content.as_bytes())
-        .map_err(SpadeboxError::IoError)?;
+        .map_err(ToolError::IoError)?;
     Ok(format!(
         "Wrote {} bytes to {}",
         params.content.len(),

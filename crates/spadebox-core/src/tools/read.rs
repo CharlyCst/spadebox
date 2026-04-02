@@ -3,7 +3,7 @@ use std::io::{self, Read};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
 
 use super::Tool;
 
@@ -28,7 +28,7 @@ impl Tool for ReadFileTool {
         // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
         // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
         // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox.root.try_clone().map_err(SpadeboxError::IoError)?;
+        let root = sandbox.root.try_clone().map_err(ToolError::IoError)?;
 
         // open() and read_to_end() are both blocking syscalls. Run them on a
         // dedicated thread to avoid stalling the async executor.
@@ -43,11 +43,11 @@ impl Tool for ReadFileTool {
             // resolution occurs here — the sandbox guarantee was established
             // at `open()` time above.
             let mut buf = Vec::new();
-            file.read_to_end(&mut buf).map_err(SpadeboxError::IoError)?;
+            file.read_to_end(&mut buf).map_err(ToolError::IoError)?;
             Ok(String::from_utf8_lossy(&buf).into_owned())
         })
         .await
-        .map_err(|e| SpadeboxError::IoError(io::Error::other(e)))?
+        .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }
 }
 
@@ -95,7 +95,7 @@ mod tests {
 
         let result = ReadFileTool::run(&sandbox, ReadParams { path: "nope.txt".into() }).await;
 
-        assert!(matches!(result, Err(SpadeboxError::NotFound(_))));
+        assert!(matches!(result, Err(ToolError::NotFound(_))));
     }
 
     #[tokio::test]
@@ -106,7 +106,7 @@ mod tests {
 
         assert!(matches!(
             result,
-            Err(SpadeboxError::EscapeAttempt(_) | SpadeboxError::PermissionDenied(_))
+            Err(ToolError::EscapeAttempt(_) | ToolError::PermissionDenied(_))
         ));
     }
 }

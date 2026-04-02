@@ -11,7 +11,7 @@ use spadebox_core::{
     },
 };
 
-fn to_napi_err(e: spadebox_core::SpadeboxError) -> napi::Error {
+fn to_napi_err(e: spadebox_core::ToolError) -> napi::Error {
     napi::Error::from_reason(e.to_string())
 }
 

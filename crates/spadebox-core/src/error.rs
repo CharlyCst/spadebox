@@ -1,17 +1,19 @@
+/// The result type for tool execution — carries a [`ToolError`] on failure.
+pub type ToolResult<T> = std::result::Result<T, ToolError>;
+
 /// Errors produced during tool execution, intended to be surfaced to the AI agent.
 ///
-/// `SpadeboxError` represents **tool-level errors** — conditions the agent should
+/// `ToolError` represents **tool-level errors** — conditions the agent should
 /// know about so it can adjust its next action (e.g. a file was not found, a path
 /// escaped the sandbox, an edit string was ambiguous). These are distinct from
-/// **protocol errors**, which indicate a developer mistake and are represented as
-/// plain `String`s returned in the `Err` branch of `call_tool` / `call_json`.
+/// **protocol errors**, which indicate a developer mistake or API errors.
 ///
 /// The canonical return type for tool execution is [`ToolResult<T>`], which is
-/// `Result<T, SpadeboxError>`. When exposing tools through a binding (JS, Python,
-/// MCP, …) the `SpadeboxError` message should be forwarded to the model as the
+/// `Result<T, ToolError>`. When exposing tools through a binding (JS, Python,
+/// MCP, …) the `ToolError` message should be forwarded to the model as the
 /// tool result rather than raised as an exception.
 #[derive(Debug, thiserror::Error)]
-pub enum SpadeboxError {
+pub enum ToolError {
     #[error("path escapes sandbox: '{0}'")]
     EscapeAttempt(String),
     #[error("file not found: '{0}'")]

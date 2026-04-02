@@ -66,7 +66,7 @@ Uses the `boa` crate for in-process JS execution. No subprocess, no Node.js depe
 
 ## Error Model
 
-A single `SpadeboxError` enum with structured variants (not stringly-typed) that survive the FFI boundary cleanly. Variants include at minimum: `EscapeAttempt`, `NotFound`, `PermissionDenied`, `Timeout`, `JsError`, `IoError`.
+A single `TooldError` enum with structured variants (not stringly-typed) that survive the FFI boundary cleanly. Variants include at minimum: `EscapeAttempt`, `NotFound`, `PermissionDenied`, `Timeout`, `JsError`, `IoError`.
 
 ## Out of Scope (v1)
 
