@@ -1,0 +1,24 @@
+{
+  "nodeModulesDir": "auto",
+  "tasks": {
+    "build": "deno run --allow-read --allow-write --allow-env --allow-run=sh,cargo,rustc --allow-sys=uid npm:@napi-rs/cli@3/napi build --platform --release",
+    "build:debug": "deno run --allow-read --allow-write --allow-env --allow-run=sh,cargo,rustc --allow-sys=uid npm:@napi-rs/cli@3/napi build --platform",
+    "lint": "deno lint",
+    "fmt": "deno fmt",
+    "test": "deno test --allow-read --allow-write --allow-env --allow-ffi test/"
+  },
+  "fmt": {
+    "lineWidth": 120,
+    "singleQuote": true,
+    "semiColons": false
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  },
+  "lint": {
+    "include": ["test/"]
+  },
+  "exclude": ["wasi-worker-browser.mjs", "node_modules"]
+}
