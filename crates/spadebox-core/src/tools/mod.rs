@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{ToolResult, Sandbox};
+use crate::{Sandbox, ToolResult};
 
 mod edit;
 mod glob;
@@ -63,8 +63,8 @@ pub trait Tool {
         Self: Sized,
     {
         async move {
-            let params: Self::Params = serde_json::from_str(&params_json)
-                .map_err(|e| e.to_string())?;
+            let params: Self::Params =
+                serde_json::from_str(&params_json).map_err(|e| e.to_string())?;
             Ok(Self::run(sandbox, params).await)
         }
     }

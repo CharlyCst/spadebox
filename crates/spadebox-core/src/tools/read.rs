@@ -3,7 +3,7 @@ use std::io::{self, Read};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
+use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
 use super::Tool;
 
@@ -69,9 +69,14 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("hello.txt"), "hello world").unwrap();
 
-        let result = ReadFileTool::run(&sandbox, ReadParams { path: "hello.txt".into() })
-            .await
-            .unwrap();
+        let result = ReadFileTool::run(
+            &sandbox,
+            ReadParams {
+                path: "hello.txt".into(),
+            },
+        )
+        .await
+        .unwrap();
 
         assert_eq!(result, "hello world");
     }
@@ -82,9 +87,14 @@ mod tests {
         fs::create_dir(dir.path().join("sub")).unwrap();
         fs::write(dir.path().join("sub/file.txt"), "nested").unwrap();
 
-        let result = ReadFileTool::run(&sandbox, ReadParams { path: "sub/file.txt".into() })
-            .await
-            .unwrap();
+        let result = ReadFileTool::run(
+            &sandbox,
+            ReadParams {
+                path: "sub/file.txt".into(),
+            },
+        )
+        .await
+        .unwrap();
 
         assert_eq!(result, "nested");
     }
@@ -93,7 +103,13 @@ mod tests {
     async fn errors_on_missing_file() {
         let (_dir, sandbox) = setup();
 
-        let result = ReadFileTool::run(&sandbox, ReadParams { path: "nope.txt".into() }).await;
+        let result = ReadFileTool::run(
+            &sandbox,
+            ReadParams {
+                path: "nope.txt".into(),
+            },
+        )
+        .await;
 
         assert!(matches!(result, Err(ToolError::NotFound(_))));
     }
@@ -102,7 +118,13 @@ mod tests {
     async fn rejects_path_traversal() {
         let (_dir, sandbox) = setup();
 
-        let result = ReadFileTool::run(&sandbox, ReadParams { path: "../etc/passwd".into() }).await;
+        let result = ReadFileTool::run(
+            &sandbox,
+            ReadParams {
+                path: "../etc/passwd".into(),
+            },
+        )
+        .await;
 
         assert!(matches!(
             result,

@@ -3,9 +3,9 @@ use std::io::{self, Write};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
+use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
-use super::{deserialize_bool_flexible, Tool};
+use super::{Tool, deserialize_bool_flexible};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct WriteParams {
@@ -116,7 +116,10 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(fs::read_to_string(dir.path().join("hello.txt")).unwrap(), "hello");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("hello.txt")).unwrap(),
+            "hello"
+        );
     }
 
     #[tokio::test]
@@ -132,7 +135,10 @@ mod tests {
         )
         .await
         .unwrap();
-        assert_eq!(fs::read_to_string(dir.path().join("a/b/c.txt")).unwrap(), "deep");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("a/b/c.txt")).unwrap(),
+            "deep"
+        );
     }
 
     #[tokio::test]
@@ -169,9 +175,11 @@ mod tests {
     #[tokio::test]
     async fn content_defaults_to_empty() {
         let (dir, sandbox) = setup();
-        let params: WriteParams =
-            serde_json::from_str(r#"{"path":"empty.txt"}"#).unwrap();
+        let params: WriteParams = serde_json::from_str(r#"{"path":"empty.txt"}"#).unwrap();
         WriteFileTool::run(&sandbox, params).await.unwrap();
-        assert_eq!(fs::read_to_string(dir.path().join("empty.txt")).unwrap(), "");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("empty.txt")).unwrap(),
+            ""
+        );
     }
 }

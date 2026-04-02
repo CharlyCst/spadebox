@@ -25,7 +25,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
+use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
 use super::Tool;
 
@@ -64,9 +64,7 @@ where
 {
     // `read_dir(".")` enumerates entries of the already-open `dir` fd.
     // SANDBOX: resolved fd-relative; no ambient filesystem lookup.
-    let entries = dir
-        .read_dir(".")
-        .map_err(|e| map_io_err(rel_path, e))?;
+    let entries = dir.read_dir(".").map_err(|e| map_io_err(rel_path, e))?;
 
     for entry in entries {
         let entry = entry.map_err(ToolError::IoError)?;
@@ -111,9 +109,7 @@ where
 pub(super) fn build_glob_set(glob: Option<&str>) -> ToolResult<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     let pattern = glob.unwrap_or("**/*");
-    builder.add(
-        Glob::new(pattern).map_err(|e| ToolError::InvalidPattern(e.to_string()))?,
-    );
+    builder.add(Glob::new(pattern).map_err(|e| ToolError::InvalidPattern(e.to_string()))?);
     builder
         .build()
         .map_err(|e| ToolError::InvalidPattern(e.to_string()))
@@ -155,10 +151,7 @@ impl Tool for GlobTool {
         // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
         // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
         // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox
-            .root
-            .try_clone()
-            .map_err(ToolError::IoError)?;
+        let root = sandbox.root.try_clone().map_err(ToolError::IoError)?;
 
         // Directory walking is synchronous. Run on a dedicated blocking thread
         // to avoid stalling the async executor.
@@ -217,9 +210,14 @@ mod tests {
         fs::write(dir.path().join("lib.rs"), "").unwrap();
         fs::write(dir.path().join("readme.txt"), "").unwrap();
 
-        let result = GlobTool::run(&sandbox, GlobParams { pattern: "**/*.rs".to_string() })
-            .await
-            .unwrap();
+        let result = GlobTool::run(
+            &sandbox,
+            GlobParams {
+                pattern: "**/*.rs".to_string(),
+            },
+        )
+        .await
+        .unwrap();
 
         assert!(result.contains("main.rs"), "got: {result}");
         assert!(result.contains("lib.rs"), "got: {result}");
@@ -233,9 +231,14 @@ mod tests {
         fs::write(dir.path().join("src/foo.rs"), "").unwrap();
         fs::write(dir.path().join("src/bar.rs"), "").unwrap();
 
-        let result = GlobTool::run(&sandbox, GlobParams { pattern: "src/**/*.rs".to_string() })
-            .await
-            .unwrap();
+        let result = GlobTool::run(
+            &sandbox,
+            GlobParams {
+                pattern: "src/**/*.rs".to_string(),
+            },
+        )
+        .await
+        .unwrap();
 
         assert!(result.contains("src/foo.rs"), "got: {result}");
         assert!(result.contains("src/bar.rs"), "got: {result}");
@@ -248,9 +251,14 @@ mod tests {
         fs::write(dir.path().join("a.rs"), "").unwrap();
         fs::write(dir.path().join("m.rs"), "").unwrap();
 
-        let result = GlobTool::run(&sandbox, GlobParams { pattern: "**/*.rs".to_string() })
-            .await
-            .unwrap();
+        let result = GlobTool::run(
+            &sandbox,
+            GlobParams {
+                pattern: "**/*.rs".to_string(),
+            },
+        )
+        .await
+        .unwrap();
 
         let paths: Vec<&str> = result.lines().collect();
         assert_eq!(paths, vec!["a.rs", "m.rs", "z.rs"], "got: {result}");
@@ -261,9 +269,14 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("file.txt"), "").unwrap();
 
-        let result = GlobTool::run(&sandbox, GlobParams { pattern: "**/*.rs".to_string() })
-            .await
-            .unwrap();
+        let result = GlobTool::run(
+            &sandbox,
+            GlobParams {
+                pattern: "**/*.rs".to_string(),
+            },
+        )
+        .await
+        .unwrap();
 
         assert_eq!(result, "No files found.");
     }
@@ -271,8 +284,13 @@ mod tests {
     #[tokio::test]
     async fn invalid_pattern_returns_error() {
         let (_dir, sandbox) = setup();
-        let result = GlobTool::run(&sandbox, GlobParams { pattern: "[invalid".to_string() })
-            .await;
+        let result = GlobTool::run(
+            &sandbox,
+            GlobParams {
+                pattern: "[invalid".to_string(),
+            },
+        )
+        .await;
 
         assert!(matches!(result, Err(ToolError::InvalidPattern(_))));
     }

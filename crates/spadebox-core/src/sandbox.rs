@@ -3,7 +3,7 @@ use std::path::Path;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
-use crate::{ToolResult, ToolError};
+use crate::{ToolError, ToolResult};
 
 pub struct Sandbox {
     pub(crate) root: Dir,

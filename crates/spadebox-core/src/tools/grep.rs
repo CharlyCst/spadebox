@@ -26,9 +26,9 @@ use grep_searcher::{Searcher, SearcherBuilder, Sink, SinkContext, SinkContextKin
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
+use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
-use super::{glob::build_glob_set, glob::walk, Tool};
+use super::{Tool, glob::build_glob_set, glob::walk};
 
 // ---------------------------------------------------------------------------
 // Parameters
@@ -79,10 +79,7 @@ impl Tool for GrepTool {
         // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
         // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
         // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox
-            .root
-            .try_clone()
-            .map_err(ToolError::IoError)?;
+        let root = sandbox.root.try_clone().map_err(ToolError::IoError)?;
 
         let context_lines = params.context_lines as usize;
 

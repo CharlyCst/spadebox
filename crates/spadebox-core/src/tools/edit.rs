@@ -3,9 +3,9 @@ use std::io::{self, Read, Write};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, ToolResult, Sandbox, ToolError};
+use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
-use super::{deserialize_bool_flexible, Tool};
+use super::{Tool, deserialize_bool_flexible};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct EditParams {
@@ -58,10 +58,8 @@ fn do_edit(root: cap_std::fs::Dir, params: EditParams) -> ToolResult<String> {
     // syscall on the already-open file descriptor. No path resolution occurs —
     // the sandbox guarantee was established at `open()` time above.
     let mut buf = Vec::new();
-    file.read_to_end(&mut buf)
-        .map_err(ToolError::IoError)?;
-    let content =
-        String::from_utf8(buf).map_err(|_| ToolError::NotUtf8(params.path.clone()))?;
+    file.read_to_end(&mut buf).map_err(ToolError::IoError)?;
+    let content = String::from_utf8(buf).map_err(|_| ToolError::NotUtf8(params.path.clone()))?;
 
     // Validate — pure in-memory string operations, no filesystem access.
     let count = content.matches(params.old_string.as_str()).count();
@@ -119,14 +117,22 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "hello world").unwrap();
 
-        EditFileTool::run(&sandbox, EditParams {
-            path: "f.txt".into(),
-            old_string: "world".into(),
-            new_string: "rust".into(),
-            replace_all: false,
-        }).await.unwrap();
+        EditFileTool::run(
+            &sandbox,
+            EditParams {
+                path: "f.txt".into(),
+                old_string: "world".into(),
+                new_string: "rust".into(),
+                replace_all: false,
+            },
+        )
+        .await
+        .unwrap();
 
-        assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "hello rust");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("f.txt")).unwrap(),
+            "hello rust"
+        );
     }
 
     #[tokio::test]
@@ -134,14 +140,22 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "a a a").unwrap();
 
-        EditFileTool::run(&sandbox, EditParams {
-            path: "f.txt".into(),
-            old_string: "a".into(),
-            new_string: "b".into(),
-            replace_all: true,
-        }).await.unwrap();
+        EditFileTool::run(
+            &sandbox,
+            EditParams {
+                path: "f.txt".into(),
+                old_string: "a".into(),
+                new_string: "b".into(),
+                replace_all: true,
+            },
+        )
+        .await
+        .unwrap();
 
-        assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "b b b");
+        assert_eq!(
+            fs::read_to_string(dir.path().join("f.txt")).unwrap(),
+            "b b b"
+        );
     }
 
     #[tokio::test]
@@ -149,12 +163,16 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "a a").unwrap();
 
-        let result = EditFileTool::run(&sandbox, EditParams {
-            path: "f.txt".into(),
-            old_string: "a".into(),
-            new_string: "b".into(),
-            replace_all: false,
-        }).await;
+        let result = EditFileTool::run(
+            &sandbox,
+            EditParams {
+                path: "f.txt".into(),
+                old_string: "a".into(),
+                new_string: "b".into(),
+                replace_all: false,
+            },
+        )
+        .await;
 
         assert!(matches!(result, Err(ToolError::AmbiguousEdit { .. })));
     }
@@ -164,12 +182,16 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "hello").unwrap();
 
-        let result = EditFileTool::run(&sandbox, EditParams {
-            path: "f.txt".into(),
-            old_string: "xyzzy".into(),
-            new_string: "b".into(),
-            replace_all: false,
-        }).await;
+        let result = EditFileTool::run(
+            &sandbox,
+            EditParams {
+                path: "f.txt".into(),
+                old_string: "xyzzy".into(),
+                new_string: "b".into(),
+                replace_all: false,
+            },
+        )
+        .await;
 
         assert!(matches!(result, Err(ToolError::StringNotFound(_))));
     }
@@ -194,12 +216,14 @@ mod tests {
         assert!(!parse(r#""false""#).replace_all);
 
         // Absent field defaults to false
-        let p: EditParams = serde_json::from_str(r#"{"path":"f","old_string":"a","new_string":"b"}"#).unwrap();
+        let p: EditParams =
+            serde_json::from_str(r#"{"path":"f","old_string":"a","new_string":"b"}"#).unwrap();
         assert!(!p.replace_all);
 
         // Invalid string is rejected
-        let result: serde_json::Result<EditParams> =
-            serde_json::from_str(r#"{"path":"f","old_string":"a","new_string":"b","replace_all":"yes"}"#);
+        let result: serde_json::Result<EditParams> = serde_json::from_str(
+            r#"{"path":"f","old_string":"a","new_string":"b","replace_all":"yes"}"#,
+        );
         assert!(result.is_err());
     }
 }
