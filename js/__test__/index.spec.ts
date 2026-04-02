@@ -100,3 +100,47 @@ test('path traversal is rejected', async (t) => {
     })
   })
 })
+
+// --- callTool ---
+
+test('callTool dispatches read_file and returns output', async (t) => {
+  await withTmpDir(async (dir) => {
+    const sb = new SpadeBox(dir)
+    await sb.writeFile('hello.txt', 'hi from callTool')
+    const result = await sb.callTool('read_file', JSON.stringify({ path: 'hello.txt' }))
+    t.false(result.isError)
+    t.is(result.output, 'hi from callTool')
+  })
+})
+
+test('callTool returns isError=true for tool-level errors (file not found)', async (t) => {
+  await withTmpDir(async (dir) => {
+    const sb = new SpadeBox(dir)
+    const result = await sb.callTool('read_file', JSON.stringify({ path: 'missing.txt' }))
+    t.true(result.isError)
+    t.regex(result.output, /not found/i)
+  })
+})
+
+test('callTool throws on unknown tool name (protocol error)', async (t) => {
+  await withTmpDir(async (dir) => {
+    const sb = new SpadeBox(dir)
+    await t.throwsAsync(() => sb.callTool('no_such_tool', '{}'), { message: /unknown tool/ })
+  })
+})
+
+test('callTool throws on malformed params JSON (protocol error)', async (t) => {
+  await withTmpDir(async (dir) => {
+    const sb = new SpadeBox(dir)
+    await t.throwsAsync(() => sb.callTool('read_file', 'not json at all'))
+  })
+})
+
+test('callTool returns isError=true for sandbox escape attempt', async (t) => {
+  await withTmpDir(async (dir) => {
+    const sb = new SpadeBox(dir)
+    const result = await sb.callTool('read_file', JSON.stringify({ path: '../etc/passwd' }))
+    t.true(result.isError)
+    t.regex(result.output, /escape|permission/i)
+  })
+})

@@ -3,7 +3,7 @@ use std::path::Path;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
-use crate::{Result, SpadeboxError};
+use crate::{ToolResult, SpadeboxError};
 
 pub struct Sandbox {
     pub(crate) root: Dir,
@@ -12,7 +12,7 @@ pub struct Sandbox {
 impl Sandbox {
     /// Opens `path` as the jail root. All subsequent tool operations are
     /// confined to this directory — no ambient filesystem access occurs.
-    pub fn new(path: impl AsRef<Path>) -> Result<Self> {
+    pub fn new(path: impl AsRef<Path>) -> ToolResult<Self> {
         let root = Dir::open_ambient_dir(&path, ambient_authority())
             .map_err(|e| map_io_err(&path.as_ref().to_string_lossy(), e))?;
         Ok(Sandbox { root })

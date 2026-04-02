@@ -959,6 +959,7 @@ dependencies = [
  "napi",
  "napi-build",
  "napi-derive",
+ "serde_json",
  "spadebox-core",
  "tokio",
 ]

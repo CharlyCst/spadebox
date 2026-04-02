@@ -3,7 +3,7 @@ use std::io::{self, Write};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
 
 use super::{deserialize_bool_flexible, Tool};
 
@@ -34,7 +34,7 @@ impl Tool for WriteFileTool {
         To create a directory without writing a file, end the path with '/' (e.g. 'src/utils/') \
         and set 'create_dirs' to true — content is ignored in that case.";
 
-    async fn run(sandbox: &Sandbox, params: WriteParams) -> Result<String> {
+    async fn run(sandbox: &Sandbox, params: WriteParams) -> ToolResult<String> {
         // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
         //
         // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
@@ -55,7 +55,7 @@ impl Tool for WriteFileTool {
 ///
 /// Separated from `run` so the borrow checker is happy with the moved `root`
 /// and `params`, and to keep the logic readable outside the async context.
-fn do_write(root: cap_std::fs::Dir, params: WriteParams) -> Result<String> {
+fn do_write(root: cap_std::fs::Dir, params: WriteParams) -> ToolResult<String> {
     if params.path.ends_with('/') {
         // Path ending with '/' is an explicit request to create a directory.
         // Trim the trailing slash for the cap-std call; create_dir_all handles

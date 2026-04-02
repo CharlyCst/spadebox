@@ -25,7 +25,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
 
 use super::Tool;
 
@@ -58,9 +58,9 @@ pub(super) fn walk<F>(
     rel_path: &str,
     glob_set: &GlobSet,
     on_file: &mut F,
-) -> Result<()>
+) -> ToolResult<()>
 where
-    F: FnMut(&Dir, &str, &str) -> Result<()>,
+    F: FnMut(&Dir, &str, &str) -> ToolResult<()>,
 {
     // `read_dir(".")` enumerates entries of the already-open `dir` fd.
     // SANDBOX: resolved fd-relative; no ambient filesystem lookup.
@@ -108,7 +108,7 @@ where
 /// When `glob` is `None`, returns a set that matches every file (`**/*`).
 /// The set is matched against relative display paths (e.g. `"src/main.rs"`)
 /// as pure string comparisons — no filesystem access is performed.
-pub(super) fn build_glob_set(glob: Option<&str>) -> Result<GlobSet> {
+pub(super) fn build_glob_set(glob: Option<&str>) -> ToolResult<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     let pattern = glob.unwrap_or("**/*");
     builder.add(
@@ -145,7 +145,7 @@ impl Tool for GlobTool {
         Use '**' to match across directories (e.g. '**/*.rs' finds all Rust files, \
         'src/**/*.ts' finds TypeScript files under src/).";
 
-    async fn run(sandbox: &Sandbox, params: GlobParams) -> Result<String> {
+    async fn run(sandbox: &Sandbox, params: GlobParams) -> ToolResult<String> {
         // Compile the glob pattern eagerly on the calling thread so we can
         // return a structured error before touching the filesystem.
         let glob_set = build_glob_set(Some(&params.pattern))?;

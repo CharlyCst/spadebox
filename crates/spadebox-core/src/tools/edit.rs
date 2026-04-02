@@ -3,7 +3,7 @@ use std::io::{self, Read, Write};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
 
 use super::{deserialize_bool_flexible, Tool};
 
@@ -32,7 +32,7 @@ impl Tool for EditFileTool {
          If the string appears multiple times and you want to replace all of them, set replace_all to true. \
          Always read the file before editing to ensure 'old_string' matches the current content exactly.";
 
-    async fn run(sandbox: &Sandbox, params: EditParams) -> Result<String> {
+    async fn run(sandbox: &Sandbox, params: EditParams) -> ToolResult<String> {
         // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
         //
         // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
@@ -48,7 +48,7 @@ impl Tool for EditFileTool {
     }
 }
 
-fn do_edit(root: cap_std::fs::Dir, params: EditParams) -> Result<String> {
+fn do_edit(root: cap_std::fs::Dir, params: EditParams) -> ToolResult<String> {
     // SANDBOX: fd-relative open enforced by cap-std / RESOLVE_BENEATH.
     let mut file = root
         .open(&params.path)

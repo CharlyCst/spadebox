@@ -2,9 +2,43 @@
 /* eslint-disable */
 export declare class SpadeBox {
   constructor(root: string)
+  /** Returns metadata for all available tools, ordered by name. */
+  tools(): Array<JsTool>
+  /**
+   * Call a tool by name, passing its parameters as a JSON string.
+   *
+   * Throws a JavaScript exception on protocol errors (unknown tool name or
+   * malformed params JSON). Returns a [`JsToolResult`] in all other cases —
+   * check `isError` to distinguish tool success from tool-level errors.
+   */
+  callTool(name: string, paramsJson: string): Promise<JsToolResult>
   readFile(path: string): Promise<string>
   writeFile(path: string, content?: string | undefined | null, createDirs?: boolean | undefined | null): Promise<string>
   glob(pattern: string): Promise<string>
   grep(pattern: string, glob?: string | undefined | null, contextLines?: number | undefined | null): Promise<string>
   editFile(path: string, oldString: string, newString: string, replaceAll?: boolean | undefined | null): Promise<string>
+}
+
+/** Tool metadata exposed to JavaScript. */
+export interface JsTool {
+  name: string
+  description: string
+  /** JSON Schema for the tool's parameters, serialized as a JSON string. */
+  inputSchema: string
+}
+
+/**
+ * Result of a tool call.
+ *
+ * Distinct from a JavaScript exception: a `JsToolResult` is always returned
+ * on successful dispatch. Use `is_error` to tell the agent whether the tool
+ * succeeded or encountered a domain error (e.g. file not found).
+ * A JavaScript exception is only thrown for protocol errors (unknown tool
+ * name, malformed params JSON) that indicate a developer mistake.
+ */
+export interface JsToolResult {
+  /** `true` when the tool encountered a domain error intended for the agent. */
+  isError: boolean
+  /** The tool's output (success) or error message (tool-level error). */
+  output: string
 }

@@ -26,7 +26,7 @@ use grep_searcher::{Searcher, SearcherBuilder, Sink, SinkContext, SinkContextKin
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
 
 use super::{glob::build_glob_set, glob::walk, Tool};
 
@@ -64,7 +64,7 @@ impl Tool for GrepTool {
         Use 'glob' to restrict the search to specific file types (e.g. '**/*.rs'). \
         Use 'context_lines' to include N surrounding lines around each match.";
 
-    async fn run(sandbox: &Sandbox, params: GrepParams) -> Result<String> {
+    async fn run(sandbox: &Sandbox, params: GrepParams) -> ToolResult<String> {
         // Compile the regex eagerly on the calling thread so we can return a
         // structured error before touching the filesystem.
         let matcher = RegexMatcher::new(&params.pattern)
@@ -126,7 +126,7 @@ fn search_file(
     matcher: &RegexMatcher,
     context_lines: usize,
     out: &mut Vec<String>,
-) -> Result<()> {
+) -> ToolResult<()> {
     // SANDBOX: fd-relative open, enforced by cap-std / RESOLVE_BENEATH.
     let file = dir.open(name).map_err(|e| map_io_err(display_path, e))?;
 

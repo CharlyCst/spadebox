@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{Result, Sandbox};
+use crate::{ToolResult, Sandbox};
 
 mod edit;
 mod glob;
@@ -39,7 +39,55 @@ pub trait Tool {
     fn run(
         sandbox: &Sandbox,
         params: Self::Params,
-    ) -> impl std::future::Future<Output = Result<String>> + Send;
+    ) -> impl Future<Output = ToolResult<String>> + Send;
+
+    /// JSON Schema for this tool's parameters, generated from the `Params` type.
+    fn schema() -> serde_json::Value
+    where
+        Self: Sized,
+    {
+        serde_json::to_value(schemars::schema_for!(Self::Params))
+            .expect("schema serialization is infallible")
+    }
+
+    /// Deserialize params from a JSON string and run the tool.
+    ///
+    /// Returns `Err(String)` if `params_json` cannot be deserialized — this is a
+    /// **protocol error** for the developer. Returns `Ok(ToolResult)` otherwise,
+    /// where the inner result carries any **tool-level error** intended for the agent.
+    fn call_json(
+        sandbox: &Sandbox,
+        params_json: String,
+    ) -> impl Future<Output = std::result::Result<ToolResult<String>, String>> + Send + '_
+    where
+        Self: Sized,
+    {
+        async move {
+            let params: Self::Params = serde_json::from_str(&params_json)
+                .map_err(|e| e.to_string())?;
+            Ok(Self::run(sandbox, params).await)
+        }
+    }
+}
+
+/// Dispatch a tool call by name, deserializing params from a JSON string.
+///
+/// - `Err(String)` — protocol error (unknown tool name or malformed params JSON).
+/// - `Ok(Ok(output))` — tool ran successfully.
+/// - `Ok(Err(e))` — tool ran but produced an error intended for the agent.
+pub async fn call_tool(
+    sandbox: &Sandbox,
+    name: &str,
+    params_json: String,
+) -> std::result::Result<ToolResult<String>, String> {
+    match name {
+        ReadFileTool::NAME => ReadFileTool::call_json(sandbox, params_json).await,
+        WriteFileTool::NAME => WriteFileTool::call_json(sandbox, params_json).await,
+        EditFileTool::NAME => EditFileTool::call_json(sandbox, params_json).await,
+        GlobTool::NAME => GlobTool::call_json(sandbox, params_json).await,
+        GrepTool::NAME => GrepTool::call_json(sandbox, params_json).await,
+        name => Err(format!("unknown tool: {name}")),
+    }
 }
 
 /// Deserializes a boolean that may arrive as a JSON bool or as a string.

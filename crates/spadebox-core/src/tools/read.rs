@@ -3,7 +3,7 @@ use std::io::{self, Read};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{sandbox::map_io_err, Result, Sandbox, SpadeboxError};
+use crate::{sandbox::map_io_err, ToolResult, Sandbox, SpadeboxError};
 
 use super::Tool;
 
@@ -22,7 +22,7 @@ impl Tool for ReadFileTool {
          Provide a relative path (e.g. 'src/main.rs' or 'README.md'). \
          Returns the file's content as a UTF-8 string.";
 
-    async fn run(sandbox: &Sandbox, params: ReadParams) -> Result<String> {
+    async fn run(sandbox: &Sandbox, params: ReadParams) -> ToolResult<String> {
         // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
         //
         // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.

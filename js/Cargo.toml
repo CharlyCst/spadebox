@@ -10,6 +10,7 @@ crate-type = ["cdylib"]
 [dependencies]
 napi = { version = "3", features = ["tokio_rt"] }
 napi-derive = "3"
+serde_json = { workspace = true }
 spadebox-core = { path = "../crates/spadebox-core" }
 tokio = { workspace = true }
 
