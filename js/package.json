@@ -4,6 +4,7 @@
   "description": "A toolbox for AI agents",
   "type": "commonjs",
   "main": "index.js",
+  "exports": "./index.js",
   "types": "index.d.ts",
   "browser": "browser.js",
   "license": "MIT",

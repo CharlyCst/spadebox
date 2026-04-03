@@ -1,11 +1,8 @@
 import { assert, assertEquals, assertMatch, assertRejects } from 'jsr:@std/assert'
 import * as fs from 'node:fs/promises'
-import { createRequire } from 'node:module'
 import * as os from 'node:os'
 import * as path from 'node:path'
-
-const require = createRequire(import.meta.url)
-const { SpadeBox } = require('../index.js') as typeof import('../index.js')
+import { SpadeBox } from '@spadebox/spadebox'
 
 async function withTmpDir(fn: (dir: string) => Promise<void>): Promise<void> {
   const dir = await fs.mkdtemp(path.join(os.tmpdir(), 'spadebox-'))

@@ -7,14 +7,10 @@
  *            example/mistral.ts /absolute/path/to/sandbox
  */
 
-import { createRequire } from 'node:module'
 import process from 'node:process'
 import * as readline from 'node:readline'
-import type { JsTool } from '../index.d.ts'
-
-// Load the native SpadeBox module (CJS)
-const _require = createRequire(import.meta.url)
-const { SpadeBox } = _require('../index.js') as typeof import('../index.js')
+import { SpadeBox } from '@spadebox/spadebox'
+import type { JsTool } from '@spadebox/spadebox'
 
 // --- Choose the API endpoint and model ---
 
