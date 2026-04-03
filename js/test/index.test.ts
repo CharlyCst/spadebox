@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertMatch, assertRejects } from 'jsr:@std/assert'
+import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'

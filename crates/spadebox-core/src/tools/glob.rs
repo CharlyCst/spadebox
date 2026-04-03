@@ -37,13 +37,13 @@ use super::Tool;
 /// for each regular file whose relative display path matches `glob_set`.
 ///
 /// - `dir`          — the already-open cap-std directory fd to walk.
-/// - `rel_path`     — display-only path of `dir` relative to the sandbox root
-///                    (empty string for the root itself).
-/// - `glob_set`     — compiled glob filter; only matching files trigger `on_file`.
-/// - `on_file`      — called with `(parent_dir, entry_name, display_path)`.
-///                    `parent_dir` and `entry_name` are provided so callers can
-///                    open the file through cap-std if needed (e.g. grep).
-///                    `display_path` is a forward-slash relative string for output.
+/// - `rel_path` — display-only path of `dir` relative to the sandbox root
+///   (empty string for the root itself).
+/// - `glob_set` — compiled glob filter; only matching files trigger `on_file`.
+/// - `on_file` — called with `(parent_dir, entry_name, display_path)`.
+///   `parent_dir` and `entry_name` are provided so callers can
+///   open the file through cap-std if needed (e.g. grep).
+///   `display_path` is a forward-slash relative string for output.
 ///
 /// # Sandbox safety
 ///

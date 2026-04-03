@@ -23,13 +23,12 @@ jobs:
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy, rustfmt
-      - name: Deno lint
-        working-directory: js
-        run: deno lint
-      - name: Cargo fmt
-        run: cargo fmt -- --check
-      - name: Clippy
-        run: cargo clippy
+      - name: Install just
+        uses: taiki-e/install-action@v2
+        with:
+          tool: just
+      - name: Lint
+        run: just lint
   build:
     strategy:
       fail-fast: false
@@ -112,14 +111,14 @@ jobs:
         uses: denoland/setup-deno@v2
         with:
           deno-version: v2.x
-      - name: Download artifacts
-        uses: actions/download-artifact@v8
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+      - name: Install just
+        uses: taiki-e/install-action@v2
         with:
-          name: bindings-${{ matrix.target }}
-          path: js
+          tool: just
       - name: Test
-        working-directory: js
-        run: deno test -A __test__/
+        run: just test
   publish:
     name: Publish
     runs-on: ubuntu-latest

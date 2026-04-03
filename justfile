@@ -12,3 +12,8 @@ test:
     # Then, we run tests in all languages
     cargo test
     cd js && deno check && deno task test
+
+lint:
+    cargo fmt -- --check
+    cargo clippy
+    cd js && deno lint

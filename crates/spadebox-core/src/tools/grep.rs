@@ -171,10 +171,10 @@ impl MatchSink<'_> {
     /// Emits a `--` separator when `line_no` is not immediately contiguous
     /// with the last emitted line.
     fn maybe_separator(&mut self, line_no: u64) {
-        if let Some(last) = self.last_line {
-            if line_no > last + 1 {
-                self.out.push("--".to_string());
-            }
+        if let Some(last) = self.last_line
+            && line_no > last + 1
+        {
+            self.out.push("--".to_string());
         }
     }
 }

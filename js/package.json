@@ -8,12 +8,8 @@
   "types": "index.d.ts",
   "license": "MIT",
   "keywords": [
-    "napi-rs",
-    "NAPI",
-    "N-API",
-    "Rust",
-    "node-addon",
-    "node-addon-api"
+    "tools",
+    "agent"
   ],
   "files": [
     "index.d.ts",

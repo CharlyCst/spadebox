@@ -17,8 +17,11 @@
     "noUnusedLocals": true,
     "noUnusedParameters": true
   },
+  "imports": {
+    "@std/assert": "jsr:@std/assert@^1"
+  },
   "lint": {
     "include": ["test/"]
   },
-  "exclude": ["wasi-worker-browser.mjs", "node_modules"]
+  "exclude": ["node_modules"]
 }

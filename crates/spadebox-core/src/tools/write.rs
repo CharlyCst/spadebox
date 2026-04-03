@@ -70,11 +70,11 @@ fn do_write(root: cap_std::fs::Dir, params: WriteParams) -> ToolResult<String> {
         // Create any missing parent directories before opening the file.
         // std::path::Path::parent() is pure string manipulation here — no
         // filesystem call — so it is safe to use on the relative path string.
-        if let Some(parent) = std::path::Path::new(&params.path).parent() {
-            if parent != std::path::Path::new("") {
-                root.create_dir_all(parent)
-                    .map_err(|e| map_io_err(&parent.to_string_lossy(), e))?;
-            }
+        if let Some(parent) = std::path::Path::new(&params.path).parent()
+            && parent != std::path::Path::new("")
+        {
+            root.create_dir_all(parent)
+                .map_err(|e| map_io_err(&parent.to_string_lossy(), e))?;
         }
     }
 
