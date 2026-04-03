@@ -1,4 +1,10 @@
-# Spadebox
+# Spadebox &emsp; [![crates.io version]][crates-io] [![NPM version]][npm]
+
+[crates-io]: https://crates.io/crates/spadebox-core
+[npm]: https://www.npmjs.com/package/@spadebox/spadebox
+[crates.io version]: https://img.shields.io/crates/v/spadebox-core
+[NPM version]: https://img.shields.io/npm/v/%40spadebox%2Fspadebox
+
 
 <div align="center">
   <picture>
