@@ -9,7 +9,10 @@ build-release:
 test:
     # First, we rebuild the bindings
     @just build
-    # Then, we run tests in all languages
+    # Then, we run tests
+    @just test-only
+
+test-only:
     cargo test
     cd js && deno check && deno task test
 
