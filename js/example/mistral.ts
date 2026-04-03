@@ -22,6 +22,16 @@ const MODEL = 'codestral-latest';
 // const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
 // const MODEL = 'mistral-small-latest';
 
+// --- Colors ---
+
+const RESET  = '\x1b[0m'
+const BLUE   = '\x1b[34m'
+const GREEN  = '\x1b[32m'
+const RED    = '\x1b[31m'
+const GRAY   = '\x1b[90m'
+const CYAN   = '\x1b[36m'
+
+
 // --- Validate args and environment ---
 
 const sandboxPath = Deno.args[0]
@@ -100,17 +110,18 @@ async function runTurn(messages: Message[]): Promise<void> {
 
     // No tool calls → the model is done for this turn
     if (!response.tool_calls || response.tool_calls.length === 0) {
-      if (response.content) console.log(`\nAgent: ${response.content}\n`)
+      if (response.content) console.log(`\n${CYAN}Agent:${RESET} ${response.content}\n`)
       return
     }
 
     // Execute each tool call and feed results back
     for (const call of response.tool_calls) {
       const { name, arguments: args } = call.function
-      console.log(`  [call] ${name}(${args})`)
+      console.log(`\n${BLUE}[call]${RESET} ${GRAY}${name}(${args})${RESET}`)
 
       const result = await sb.callTool(name, args)
-      console.log(`  [${result.isError ? 'error' : 'ok'}] ${result.output}`)
+      const tag = result.isError ? `${RED}[error]${RESET}` : `${GREEN}[ok]${RESET}`
+      console.log(`${tag} ${GRAY}${result.output}${RESET}`)
 
       messages.push({ role: 'tool', tool_call_id: call.id, content: result.output })
     }
@@ -129,7 +140,8 @@ const messages: Message[] = [{ role: 'system', content: SYSTEM_PROMPT }]
 console.log(`Todo agent ready. Sandbox: ${sandboxPath}`)
 console.log('Type your request, Ctrl+D to exit.\n')
 
-const rl = readline.createInterface({ input: process.stdin })
+const rl = readline.createInterface({ input: process.stdin, output: process.stdout, prompt: '> ' })
+rl.prompt()
 
 for await (const line of rl) {
   if (!line.trim()) continue
@@ -139,4 +151,5 @@ for await (const line of rl) {
   } catch (err) {
     console.error('Error:', err instanceof Error ? err.message : err)
   }
+  rl.prompt()
 }
