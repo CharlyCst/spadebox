@@ -3,6 +3,7 @@ authors = ["Charly Castes <charly.castes@epfl.ch>"]
 edition = "2024"
 name = "spadebox-js"
 version = "0.1.0"
+publish = false
 
 [lib]
 crate-type = ["cdylib"]

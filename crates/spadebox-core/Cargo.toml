@@ -2,6 +2,9 @@
 name = "spadebox-core"
 version = "0.1.0"
 edition = "2024"
+description = "Common tools for AI agents"
+license = "MIT"
+repository = "https://github.com/CharlyCst/spadebox"
 
 [dependencies]
 cap-std = "3"
