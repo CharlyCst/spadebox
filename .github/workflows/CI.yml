@@ -163,6 +163,9 @@ jobs:
           if [[ "$GITHUB_REF_TYPE" == "tag" ]]; then
             echo "//registry.npmjs.org/:_authToken=$NPM_TOKEN" >> ~/.npmrc
             npm publish --access public
+            for pkg in ./npm/*/; do
+              npm publish "$pkg" --access public
+            done
           else
             echo "Not a tag release, skipping publish"
           fi
