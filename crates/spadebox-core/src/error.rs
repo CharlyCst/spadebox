@@ -30,7 +30,9 @@ pub enum ToolError {
     StringNotFound(String),
     #[error("file '{0}' must be read before it can be written")]
     NotRead(String),
-    #[error("file '{0}' was modified externally since it was last read, it must be read again before it can be written")]
+    #[error(
+        "file '{0}' was modified externally since it was last read, it must be read again before it can be written"
+    )]
     FileModified(String),
     #[error("invalid pattern: {0}")]
     InvalidPattern(String),

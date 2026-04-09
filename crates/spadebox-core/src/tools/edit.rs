@@ -53,11 +53,7 @@ impl Tool for EditFileTool {
     }
 }
 
-fn do_edit(
-    root: cap_std::fs::Dir,
-    params: EditParams,
-    registry: &Registry,
-) -> ToolResult<String> {
+fn do_edit(root: cap_std::fs::Dir, params: EditParams, registry: &Registry) -> ToolResult<String> {
     // Enforce read-before-write and check for external modifications.
     let current_mtime = root
         .metadata(&params.path)

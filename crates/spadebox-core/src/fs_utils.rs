@@ -1,8 +1,8 @@
 use cap_std::fs::File;
 use cap_std::time::SystemTime;
 
-use crate::{ToolError, ToolResult};
 use crate::sandbox::Registry;
+use crate::{ToolError, ToolResult};
 
 /// Checks that `path` was read before writing and has not been modified externally.
 ///

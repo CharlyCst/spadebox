@@ -2,9 +2,9 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
-use cap_std::time::SystemTime;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
+use cap_std::time::SystemTime;
 
 use crate::{ToolError, ToolResult};
 

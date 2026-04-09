@@ -52,10 +52,7 @@ impl Tool for ReadFileTool {
                 .metadata()
                 .and_then(|m| m.modified())
                 .map_err(ToolError::IoError)?;
-            registry
-                .lock()
-                .unwrap()
-                .insert(params.path.clone(), mtime);
+            registry.lock().unwrap().insert(params.path.clone(), mtime);
 
             Ok(String::from_utf8_lossy(&buf).into_owned())
         })

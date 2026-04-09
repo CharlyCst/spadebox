@@ -226,9 +226,14 @@ mod tests {
     async fn errors_on_external_modification() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "v1").unwrap();
-        ReadFileTool::run(&sandbox, ReadParams { path: "f.txt".into() })
-            .await
-            .unwrap();
+        ReadFileTool::run(
+            &sandbox,
+            ReadParams {
+                path: "f.txt".into(),
+            },
+        )
+        .await
+        .unwrap();
 
         // Simulate an external modification by bumping the mtime without
         // changing content, using std::fs::FileTimes (stable since Rust 1.75).
@@ -257,16 +262,35 @@ mod tests {
     async fn allows_consecutive_writes() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "v1").unwrap();
-        ReadFileTool::run(&sandbox, ReadParams { path: "f.txt".into() })
-            .await
-            .unwrap();
+        ReadFileTool::run(
+            &sandbox,
+            ReadParams {
+                path: "f.txt".into(),
+            },
+        )
+        .await
+        .unwrap();
 
-        WriteFileTool::run(&sandbox, WriteParams { path: "f.txt".into(), content: "v2".into(), create_dirs: false })
-            .await
-            .unwrap();
-        WriteFileTool::run(&sandbox, WriteParams { path: "f.txt".into(), content: "v3".into(), create_dirs: false })
-            .await
-            .unwrap();
+        WriteFileTool::run(
+            &sandbox,
+            WriteParams {
+                path: "f.txt".into(),
+                content: "v2".into(),
+                create_dirs: false,
+            },
+        )
+        .await
+        .unwrap();
+        WriteFileTool::run(
+            &sandbox,
+            WriteParams {
+                path: "f.txt".into(),
+                content: "v3".into(),
+                create_dirs: false,
+            },
+        )
+        .await
+        .unwrap();
 
         assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "v3");
     }
@@ -275,9 +299,14 @@ mod tests {
     async fn allows_write_after_read() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "v1").unwrap();
-        ReadFileTool::run(&sandbox, ReadParams { path: "f.txt".into() })
-            .await
-            .unwrap();
+        ReadFileTool::run(
+            &sandbox,
+            ReadParams {
+                path: "f.txt".into(),
+            },
+        )
+        .await
+        .unwrap();
 
         WriteFileTool::run(
             &sandbox,
