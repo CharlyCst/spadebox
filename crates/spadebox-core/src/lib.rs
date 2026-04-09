@@ -1,4 +1,5 @@
 mod error;
+mod fs_utils;
 mod sandbox;
 pub mod tools;
 

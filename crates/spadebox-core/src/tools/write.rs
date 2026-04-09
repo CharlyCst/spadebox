@@ -1,9 +1,13 @@
 use std::io::{self, Write};
+use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
+
+use crate::fs_utils;
+use crate::sandbox::Registry;
 
 use super::{Tool, deserialize_bool_flexible};
 
@@ -41,11 +45,12 @@ impl Tool for WriteFileTool {
         // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
         // original — all cap-std invariants are preserved across the clone.
         let root = sandbox.root.try_clone().map_err(ToolError::IoError)?;
+        let registry = Arc::clone(&sandbox.read_registry);
 
         // All filesystem operations (create_dir_all, create, write_all) are
         // blocking syscalls. Run them on a dedicated thread to avoid stalling
         // the async executor.
-        tokio::task::spawn_blocking(move || do_write(root, params))
+        tokio::task::spawn_blocking(move || do_write(root, params, &registry))
             .await
             .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }
@@ -55,7 +60,11 @@ impl Tool for WriteFileTool {
 ///
 /// Separated from `run` so the borrow checker is happy with the moved `root`
 /// and `params`, and to keep the logic readable outside the async context.
-fn do_write(root: cap_std::fs::Dir, params: WriteParams) -> ToolResult<String> {
+fn do_write(
+    root: cap_std::fs::Dir,
+    params: WriteParams,
+    registry: &Registry,
+) -> ToolResult<String> {
     if params.path.ends_with('/') {
         // Path ending with '/' is an explicit request to create a directory.
         // Trim the trailing slash for the cap-std call; create_dir_all handles
@@ -78,11 +87,22 @@ fn do_write(root: cap_std::fs::Dir, params: WriteParams) -> ToolResult<String> {
         }
     }
 
+    // If the file already exists, enforce read-before-write and check for
+    // external modifications by comparing the stored mtime against the current one.
+    if let Ok(metadata) = root.metadata(&params.path) {
+        let current_mtime = metadata.modified().map_err(ToolError::IoError)?;
+        fs_utils::check_write_allowed(registry, &params.path, current_mtime)?;
+    }
+
     let mut file = root
         .create(&params.path)
         .map_err(|e| map_io_err(&params.path, e))?;
     file.write_all(params.content.as_bytes())
         .map_err(ToolError::IoError)?;
+
+    // Update the registry with the new mtime so subsequent writes are allowed.
+    fs_utils::update_registry(registry, &params.path, &file)?;
+
     Ok(format!(
         "Wrote {} bytes to {}",
         params.content.len(),
@@ -94,6 +114,7 @@ fn do_write(root: cap_std::fs::Dir, params: WriteParams) -> ToolResult<String> {
 mod tests {
     use super::*;
     use crate::Sandbox;
+    use crate::tools::read::{ReadFileTool, ReadParams};
     use std::fs;
     use tempfile::TempDir;
 
@@ -181,5 +202,94 @@ mod tests {
             fs::read_to_string(dir.path().join("empty.txt")).unwrap(),
             ""
         );
+    }
+
+    #[tokio::test]
+    async fn errors_without_prior_read() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("existing.txt"), "content").unwrap();
+
+        let result = WriteFileTool::run(
+            &sandbox,
+            WriteParams {
+                path: "existing.txt".into(),
+                content: "new content".into(),
+                create_dirs: false,
+            },
+        )
+        .await;
+
+        assert!(matches!(result, Err(ToolError::NotRead(_))));
+    }
+
+    #[tokio::test]
+    async fn errors_on_external_modification() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("f.txt"), "v1").unwrap();
+        ReadFileTool::run(&sandbox, ReadParams { path: "f.txt".into() })
+            .await
+            .unwrap();
+
+        // Simulate an external modification by bumping the mtime without
+        // changing content, using std::fs::FileTimes (stable since Rust 1.75).
+        let path = dir.path().join("f.txt");
+        let mtime = fs::metadata(&path).unwrap().modified().unwrap();
+        let file = fs::OpenOptions::new().write(true).open(&path).unwrap();
+        file.set_times(
+            fs::FileTimes::new().set_modified(mtime + std::time::Duration::from_secs(1)),
+        )
+        .unwrap();
+
+        let result = WriteFileTool::run(
+            &sandbox,
+            WriteParams {
+                path: "f.txt".into(),
+                content: "v2".into(),
+                create_dirs: false,
+            },
+        )
+        .await;
+
+        assert!(matches!(result, Err(ToolError::FileModified(_))));
+    }
+
+    #[tokio::test]
+    async fn allows_consecutive_writes() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("f.txt"), "v1").unwrap();
+        ReadFileTool::run(&sandbox, ReadParams { path: "f.txt".into() })
+            .await
+            .unwrap();
+
+        WriteFileTool::run(&sandbox, WriteParams { path: "f.txt".into(), content: "v2".into(), create_dirs: false })
+            .await
+            .unwrap();
+        WriteFileTool::run(&sandbox, WriteParams { path: "f.txt".into(), content: "v3".into(), create_dirs: false })
+            .await
+            .unwrap();
+
+        assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "v3");
+    }
+
+    #[tokio::test]
+    async fn allows_write_after_read() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("f.txt"), "v1").unwrap();
+        ReadFileTool::run(&sandbox, ReadParams { path: "f.txt".into() })
+            .await
+            .unwrap();
+
+        WriteFileTool::run(
+            &sandbox,
+            WriteParams {
+                path: "f.txt".into(),
+                content: "v2".into(),
+                create_dirs: false,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(fs::read_to_string(dir.path().join("f.txt")).unwrap(), "v2");
     }
 }

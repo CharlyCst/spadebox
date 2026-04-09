@@ -1,9 +1,13 @@
 use std::io::{self, Read, Write};
+use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
+
+use crate::fs_utils;
+use crate::sandbox::Registry;
 
 use super::{Tool, deserialize_bool_flexible};
 
@@ -39,16 +43,29 @@ impl Tool for EditFileTool {
         // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
         // original — all cap-std invariants are preserved across the clone.
         let root = sandbox.root.try_clone().map_err(ToolError::IoError)?;
+        let registry = Arc::clone(&sandbox.read_registry);
 
         // open(), read_to_end(), create(), and write_all() are all blocking
         // syscalls. Run them on a dedicated thread to avoid stalling the executor.
-        tokio::task::spawn_blocking(move || do_edit(root, params))
+        tokio::task::spawn_blocking(move || do_edit(root, params, &registry))
             .await
             .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }
 }
 
-fn do_edit(root: cap_std::fs::Dir, params: EditParams) -> ToolResult<String> {
+fn do_edit(
+    root: cap_std::fs::Dir,
+    params: EditParams,
+    registry: &Registry,
+) -> ToolResult<String> {
+    // Enforce read-before-write and check for external modifications.
+    let current_mtime = root
+        .metadata(&params.path)
+        .map_err(|e| map_io_err(&params.path, e))?
+        .modified()
+        .map_err(ToolError::IoError)?;
+    fs_utils::check_write_allowed(registry, &params.path, current_mtime)?;
+
     // SANDBOX: fd-relative open enforced by cap-std / RESOLVE_BENEATH.
     let mut file = root
         .open(&params.path)
@@ -92,6 +109,9 @@ fn do_edit(root: cap_std::fs::Dir, params: EditParams) -> ToolResult<String> {
     file.write_all(updated.as_bytes())
         .map_err(ToolError::IoError)?;
 
+    // Update the registry with the new mtime so subsequent writes are allowed.
+    fs_utils::update_registry(registry, &params.path, &file)?;
+
     let replacements = if params.replace_all { count } else { 1 };
     Ok(format!(
         "Replaced {} occurrence(s) in '{}'",
@@ -103,6 +123,7 @@ fn do_edit(root: cap_std::fs::Dir, params: EditParams) -> ToolResult<String> {
 mod tests {
     use super::*;
     use crate::Sandbox;
+    use crate::tools::read::{ReadFileTool, ReadParams};
     use std::fs;
     use tempfile::TempDir;
 
@@ -112,10 +133,17 @@ mod tests {
         (dir, sandbox)
     }
 
+    async fn read(sandbox: &Sandbox, path: &str) {
+        ReadFileTool::run(sandbox, ReadParams { path: path.into() })
+            .await
+            .unwrap();
+    }
+
     #[tokio::test]
     async fn replaces_string() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "hello world").unwrap();
+        read(&sandbox, "f.txt").await;
 
         EditFileTool::run(
             &sandbox,
@@ -139,6 +167,7 @@ mod tests {
     async fn replace_all_replaces_every_occurrence() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "a a a").unwrap();
+        read(&sandbox, "f.txt").await;
 
         EditFileTool::run(
             &sandbox,
@@ -162,6 +191,7 @@ mod tests {
     async fn errors_on_ambiguous_match() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "a a").unwrap();
+        read(&sandbox, "f.txt").await;
 
         let result = EditFileTool::run(
             &sandbox,
@@ -181,6 +211,7 @@ mod tests {
     async fn errors_on_string_not_found() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "hello").unwrap();
+        read(&sandbox, "f.txt").await;
 
         let result = EditFileTool::run(
             &sandbox,
@@ -194,6 +225,25 @@ mod tests {
         .await;
 
         assert!(matches!(result, Err(ToolError::StringNotFound(_))));
+    }
+
+    #[tokio::test]
+    async fn errors_without_prior_read() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("f.txt"), "hello").unwrap();
+
+        let result = EditFileTool::run(
+            &sandbox,
+            EditParams {
+                path: "f.txt".into(),
+                old_string: "hello".into(),
+                new_string: "world".into(),
+                replace_all: false,
+            },
+        )
+        .await;
+
+        assert!(matches!(result, Err(ToolError::NotRead(_))));
     }
 
     use super::EditParams;

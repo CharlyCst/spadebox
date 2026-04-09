@@ -1,4 +1,5 @@
 use std::io::{self, Read};
+use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -29,6 +30,7 @@ impl Tool for ReadFileTool {
         // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
         // original — all cap-std invariants are preserved across the clone.
         let root = sandbox.root.try_clone().map_err(ToolError::IoError)?;
+        let registry = Arc::clone(&sandbox.read_registry);
 
         // open() and read_to_end() are both blocking syscalls. Run them on a
         // dedicated thread to avoid stalling the async executor.
@@ -44,6 +46,17 @@ impl Tool for ReadFileTool {
             // at `open()` time above.
             let mut buf = Vec::new();
             file.read_to_end(&mut buf).map_err(ToolError::IoError)?;
+
+            // Record the mtime so write/edit tools can detect external modifications.
+            let mtime = file
+                .metadata()
+                .and_then(|m| m.modified())
+                .map_err(ToolError::IoError)?;
+            registry
+                .lock()
+                .unwrap()
+                .insert(params.path.clone(), mtime);
+
             Ok(String::from_utf8_lossy(&buf).into_owned())
         })
         .await

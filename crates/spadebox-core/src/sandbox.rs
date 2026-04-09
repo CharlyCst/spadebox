@@ -1,12 +1,24 @@
+use std::collections::HashMap;
 use std::path::Path;
+use std::sync::{Arc, Mutex};
 
+use cap_std::time::SystemTime;
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
 use crate::{ToolError, ToolResult};
 
+/// Registry mapping relative file paths to the mtime recorded at last read.
+///
+/// Used to enforce read-before-write and detect external modifications.
+/// The inner `Mutex` is a `std::sync::Mutex` (not `tokio::sync::Mutex`) because it
+/// is only ever locked on blocking threads inside `spawn_blocking`. Never lock it
+/// across an `.await` point — that would block the async executor.
+pub(crate) type Registry = Arc<Mutex<HashMap<String, SystemTime>>>;
+
 pub struct Sandbox {
     pub(crate) root: Dir,
+    pub(crate) read_registry: Registry,
 }
 
 impl Sandbox {
@@ -15,7 +27,10 @@ impl Sandbox {
     pub fn new(path: impl AsRef<Path>) -> ToolResult<Self> {
         let root = Dir::open_ambient_dir(&path, ambient_authority())
             .map_err(|e| map_io_err(&path.as_ref().to_string_lossy(), e))?;
-        Ok(Sandbox { root })
+        Ok(Sandbox {
+            root,
+            read_registry: Arc::new(Mutex::new(HashMap::new())),
+        })
     }
 }
 
