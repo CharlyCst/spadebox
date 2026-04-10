@@ -31,6 +31,8 @@ export declare class SpadeBox {
    *
    * `path` must be relative to the sandbox root (e.g. `'src/main.rs'`).
    * Creates the file if it does not exist, or overwrites it entirely if it does.
+   * If the file already exists, it must be read first — attempting to overwrite
+   * without a prior `readFile` call will throw an error.
    * Set `createDirs` to `true` to create any missing intermediate directories
    * automatically. To create a directory without writing a file, end `path`
    * with `'/'` (e.g. `'src/utils/'`) — `content` is ignored in that case.

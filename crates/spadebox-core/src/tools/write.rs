@@ -34,6 +34,8 @@ impl Tool for WriteFileTool {
     const DESCRIPTION: &'static str = "Write text content to a file. \
         Provide a relative path (e.g. 'src/main.rs') and the full UTF-8 content to write. \
         Creates the file if it does not exist, or overwrites it entirely if it does. \
+        If the file already exists, it must be read first — attempting to overwrite without a prior \
+        read will return an error. \
         Set 'create_dirs' to true to create any missing intermediate directories automatically. \
         To create a directory without writing a file, end the path with '/' (e.g. 'src/utils/') \
         and set 'create_dirs' to true — content is ignored in that case.";
