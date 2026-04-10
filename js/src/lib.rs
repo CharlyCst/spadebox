@@ -1,4 +1,8 @@
 #![deny(clippy::all)]
+// Doc comments in this file are surfaced as JavaScript API documentation via
+// NAPI-RS. Use camelCase for parameter and field names in doc comments to match
+// the JavaScript calling convention (NAPI-RS converts snake_case identifiers to
+// camelCase in the generated bindings).
 
 use std::collections::BTreeMap;
 
@@ -17,7 +21,7 @@ fn to_napi_err(e: spadebox_core::ToolError) -> napi::Error {
 
 /// Tool metadata exposed to JavaScript.
 #[napi(object)]
-pub struct JsTool {
+pub struct SbTool {
   pub name: String,
   pub description: String,
   /// JSON Schema for the tool's parameters, serialized as a JSON string.
@@ -26,13 +30,13 @@ pub struct JsTool {
 
 /// Result of a tool call.
 ///
-/// Distinct from a JavaScript exception: a `JsToolResult` is always returned
-/// on successful dispatch. Use `is_error` to tell the agent whether the tool
+/// Distinct from a JavaScript exception: a `SbToolResult` is always returned
+/// on successful dispatch. Use `isError` to tell the agent whether the tool
 /// succeeded or encountered a domain error (e.g. file not found).
 /// A JavaScript exception is only thrown for protocol errors (unknown tool
 /// name, malformed params JSON) that indicate a developer mistake.
 #[napi(object)]
-pub struct JsToolResult {
+pub struct SbToolResult {
   /// `true` when the tool encountered a domain error intended for the agent.
   pub is_error: bool,
   /// The tool's output (success) or error message (tool-level error).
@@ -77,10 +81,15 @@ pub struct SpadeBox {
 
 #[napi]
 impl SpadeBox {
+  /// Create a new SpadeBox instance.
+  ///
+  /// `sandboxRoot` is the absolute path to the root directory of the
+  /// filesystem sandbox. All file-system operations are restricted to this
+  /// directory.
   #[napi(constructor)]
-  pub fn new(root: String) -> napi::Result<Self> {
-    Sandbox::new(&root)
-      .map(|inner| SpadeBox {
+  pub fn new(sandbox_root: String) -> napi::Result<Self> {
+    Sandbox::new(&sandbox_root)
+      .map(|inner| Self {
         inner,
         tools: build_tools(),
       })
@@ -89,11 +98,11 @@ impl SpadeBox {
 
   /// Returns metadata for all available tools, ordered by name.
   #[napi]
-  pub fn tools(&self) -> Vec<JsTool> {
+  pub fn tools(&self) -> Vec<SbTool> {
     self
       .tools
       .values()
-      .map(|entry| JsTool {
+      .map(|entry| SbTool {
         name: entry.name.to_string(),
         description: entry.description.to_string(),
         input_schema: entry.schema.clone(),
@@ -101,26 +110,30 @@ impl SpadeBox {
       .collect()
   }
 
-  /// Call a tool by name, passing its parameters as a JSON string.
+  /// Call a tool by name, passing its parameters as a JSON string (`paramsJson`).
   ///
   /// Throws a JavaScript exception on protocol errors (unknown tool name or
-  /// malformed params JSON). Returns a [`JsToolResult`] in all other cases —
+  /// malformed `paramsJson`). Returns a [`SbToolResult`] in all other cases —
   /// check `isError` to distinguish tool success from tool-level errors.
   #[napi]
-  pub async fn call_tool(&self, name: String, params_json: String) -> napi::Result<JsToolResult> {
+  pub async fn call_tool(&self, name: String, params_json: String) -> napi::Result<SbToolResult> {
     match spadebox_core::call_tool(&self.inner, &name, params_json).await {
       Err(protocol_err) => Err(napi::Error::from_reason(protocol_err)),
-      Ok(Ok(output)) => Ok(JsToolResult {
+      Ok(Ok(output)) => Ok(SbToolResult {
         is_error: false,
         output,
       }),
-      Ok(Err(tool_err)) => Ok(JsToolResult {
+      Ok(Err(tool_err)) => Ok(SbToolResult {
         is_error: true,
         output: tool_err.to_string(),
       }),
     }
   }
 
+  /// Read the full text content of a file. Calls the `read_file` tool directly.
+  ///
+  /// `path` must be relative to the sandbox root (e.g. `'src/main.rs'`).
+  /// Returns the file's content as a UTF-8 string.
   #[napi]
   pub async fn read_file(&self, path: String) -> napi::Result<String> {
     ReadFileTool::run(&self.inner, ReadParams { path })
@@ -128,6 +141,13 @@ impl SpadeBox {
       .map_err(to_napi_err)
   }
 
+  /// Write text content to a file. Calls the `write_file` tool directly.
+  ///
+  /// `path` must be relative to the sandbox root (e.g. `'src/main.rs'`).
+  /// Creates the file if it does not exist, or overwrites it entirely if it does.
+  /// Set `createDirs` to `true` to create any missing intermediate directories
+  /// automatically. To create a directory without writing a file, end `path`
+  /// with `'/'` (e.g. `'src/utils/'`) — `content` is ignored in that case.
   #[napi]
   pub async fn write_file(
     &self,
@@ -147,6 +167,12 @@ impl SpadeBox {
     .map_err(to_napi_err)
   }
 
+  /// List files matching a glob pattern. Calls the `glob` tool directly.
+  ///
+  /// Returns a newline-separated list of relative file paths sorted
+  /// alphabetically. Use `'**'` to match across directories
+  /// (e.g. `'**/*.rs'` finds all Rust files, `'src/**/*.ts'` finds TypeScript
+  /// files under `src/`).
   #[napi]
   pub async fn glob(&self, pattern: String) -> napi::Result<String> {
     GlobTool::run(&self.inner, GlobParams { pattern })
@@ -154,6 +180,12 @@ impl SpadeBox {
       .map_err(to_napi_err)
   }
 
+  /// Search file contents for a regex pattern. Calls the `grep` tool directly.
+  ///
+  /// Returns matching lines with their file path and line number.
+  /// Use `glob` to restrict the search to specific file types
+  /// (e.g. `'**/*.rs'`). Use `contextLines` to include N surrounding lines
+  /// around each match.
   #[napi]
   pub async fn grep(
     &self,
@@ -173,6 +205,14 @@ impl SpadeBox {
     .map_err(to_napi_err)
   }
 
+  /// Replace text within a file. Calls the `edit_file` tool directly.
+  ///
+  /// Finds the exact string `oldString` in the file at `path` and replaces it
+  /// with `newString`. By default `oldString` must appear exactly once —
+  /// include enough surrounding context to make it unique. Set `replaceAll` to
+  /// `true` to replace every occurrence instead.
+  /// Always read the file before editing to ensure `oldString` matches the
+  /// current content exactly.
   #[napi]
   pub async fn edit_file(
     &self,

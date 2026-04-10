@@ -10,7 +10,7 @@
 import process from 'node:process'
 import * as readline from 'node:readline'
 import { SpadeBox } from '@spadebox/spadebox'
-import type { JsTool } from '@spadebox/spadebox'
+import type { SbTool } from '@spadebox/spadebox'
 
 // --- Choose the API endpoint and model ---
 
@@ -51,7 +51,7 @@ if (!apiKey) {
 const sb = new SpadeBox(sandboxPath)
 
 // Convert SpadeBox tool metadata to the Mistral tool definition format
-const tools = sb.tools().map((t: JsTool) => ({
+const tools = sb.tools().map((t: SbTool) => ({
   type: 'function' as const,
   function: {
     name: t.name,
