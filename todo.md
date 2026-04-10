@@ -1,7 +1,7 @@
 # TODO list
 
 Items we should address:
-- [ ] Prevent writing (or editing) a file if it wasn't read before.
+- [X] Prevent writing (or editing) a file if it wasn't read before.
       Note: If the file has been modified by someone else than the agent since last read/write we should also block the write.
 - [ ] Add support for limit to read tool (both bytes and and max lines), and optionnal offset parameter for large file (by lines or bytes?).
 - [ ] Add support for selecting which tools to include. Maybe we could start with presets? Like "Files" and "FilesReadOnly", where "Files" would be read/write/edit/grep/glob, and "FilesReadOnly" would be read/grep/glob.
