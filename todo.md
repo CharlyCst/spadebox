@@ -7,10 +7,6 @@ Items we should address:
 - [ ] Add support for selecting which tools to include. Maybe we could start with presets? Like "Files" and "FilesReadOnly", where "Files" would be read/write/edit/grep/glob, and "FilesReadOnly" would be read/grep/glob.
 - [ ] Add fetch tool. We should provide some degree of configuration for the fetch tool, and provide fine-grained domain and verb (GET, POST, etc...) whitelisting.
 
-Code maintenance:
-- [ ] Write unit tests for each tools using tempfile
-- [ ] Comment code in all toos, like for the grep tool
-
 ## References:
 
 Check the following implementation:
