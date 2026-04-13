@@ -26,6 +26,11 @@
     "registry": "https://registry.npmjs.org/",
     "access": "public"
   },
+  "optionalDependencies": {
+    "@spadebox/spadebox-linux-x64-gnu": "0.1.1",
+    "@spadebox/spadebox-linux-arm64-gnu": "0.1.1",
+    "@spadebox/spadebox-darwin-arm64": "0.1.1"
+  },
   "napi": {
     "binaryName": "spadebox",
     "targets": [
