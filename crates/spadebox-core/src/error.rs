@@ -36,6 +36,10 @@ pub enum ToolError {
     FileModified(String),
     #[error("invalid pattern: {0}")]
     InvalidPattern(String),
+    #[error("invalid URL: {0}")]
+    InvalidUrl(String),
+    #[error("HTTP error: {0}")]
+    HttpError(String),
     #[error("timeout")]
     Timeout,
     #[error("JS error: {0}")]

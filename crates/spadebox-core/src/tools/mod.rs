@@ -4,12 +4,14 @@ use serde::Deserialize;
 use crate::{Sandbox, ToolResult};
 
 mod edit;
+mod fetch;
 mod glob;
 mod grep;
 mod read;
 mod write;
 
 pub use edit::{EditFileTool, EditParams};
+pub use fetch::{FetchParams, FetchTool};
 pub use glob::{GlobParams, GlobTool};
 pub use grep::{GrepParams, GrepTool};
 pub use read::{ReadFileTool, ReadParams};
@@ -86,6 +88,7 @@ pub async fn call_tool(
         EditFileTool::NAME => EditFileTool::call_json(sandbox, params_json).await,
         GlobTool::NAME => GlobTool::call_json(sandbox, params_json).await,
         GrepTool::NAME => GrepTool::call_json(sandbox, params_json).await,
+        FetchTool::NAME => FetchTool::call_json(sandbox, params_json).await,
         name => Err(format!("unknown tool: {name}")),
     }
 }
