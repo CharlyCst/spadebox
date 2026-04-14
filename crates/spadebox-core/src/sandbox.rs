@@ -86,7 +86,11 @@ impl DomainRule {
         let matcher = Glob::new(&pattern)
             .map_err(|e| ToolError::InvalidPattern(e.to_string()))?
             .compile_matcher();
-        Ok(DomainRule { _pattern: pattern, allowed_verbs, matcher })
+        Ok(DomainRule {
+            _pattern: pattern,
+            allowed_verbs,
+            matcher,
+        })
     }
 }
 

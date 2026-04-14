@@ -74,8 +74,9 @@ impl Tool for FetchTool {
 
         // Validate the requested method against the rule.
         let method_upper = params.method.to_uppercase();
-        let verb = HttpVerb::from_str(&method_upper)
-            .ok_or_else(|| ToolError::PermissionDenied(format!("unknown HTTP method '{}'", params.method)))?;
+        let verb = HttpVerb::from_str(&method_upper).ok_or_else(|| {
+            ToolError::PermissionDenied(format!("unknown HTTP method '{}'", params.method))
+        })?;
 
         if !allowed_verbs.contains(&verb) {
             return Err(ToolError::PermissionDenied(format!(
@@ -113,8 +114,6 @@ impl Tool for FetchTool {
     }
 }
 
-
-
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -122,8 +121,8 @@ impl Tool for FetchTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::sandbox::{DomainRule, HttpConfig, HttpVerb};
     use crate::Sandbox;
+    use crate::sandbox::{DomainRule, HttpConfig, HttpVerb};
     use tempfile::TempDir;
 
     fn setup_sandbox(http: HttpConfig) -> (TempDir, Sandbox) {
@@ -201,6 +200,4 @@ mod tests {
         .await;
         assert!(matches!(result, Err(ToolError::PermissionDenied(_))));
     }
-
-
 }

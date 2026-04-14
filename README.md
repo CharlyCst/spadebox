@@ -23,5 +23,6 @@ Currently, Spadebox includes the following tools:
 - `edit_file`
 - `grep`
 - `glob`
+- `fetch`
 
 Spadebox uses the [`cap-std` crate](https://github.com/bytecodealliance/cap-std) for file system sandboxing.
