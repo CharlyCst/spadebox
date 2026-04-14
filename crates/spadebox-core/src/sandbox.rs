@@ -2,12 +2,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use crate::{ToolError, ToolResult};
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 use cap_std::time::SystemTime;
-use globset::{Glob, GlobMatcher};
-
-use crate::{ToolError, ToolResult};
 
 /// Registry mapping relative file paths to the mtime recorded at last read.
 ///
@@ -47,7 +45,7 @@ impl HttpVerb {
 
     /// Parses an uppercase HTTP method string into an [`HttpVerb`].
     /// Returns `None` if the method is not recognised.
-    pub(crate) fn from_str(method: &str) -> Option<Self> {
+    pub fn from_str(method: &str) -> Option<Self> {
         match method {
             "GET" => Some(HttpVerb::Get),
             "POST" => Some(HttpVerb::Post),
@@ -60,37 +58,58 @@ impl HttpVerb {
     }
 }
 
-/// A domain rule that maps a glob pattern to a set of allowed HTTP verbs.
+/// A domain rule that maps a pattern to a set of allowed HTTP verbs.
 ///
-/// Rules are evaluated in order; the first matching rule wins.
-/// Use `"*"` as the pattern to create a catch-all default.
-/// Domains not matched by any rule are rejected.
+/// Patterns may be:
+/// - An exact hostname: `"api.example.com"`
+/// - A wildcard prefix: `"*.example.com"` (matches any subdomain)
+/// - A catch-all: `"*"` (matches any host)
 ///
-/// Construct with [`DomainRule::new`] — the glob pattern is compiled once at
-/// creation time and reused on every request.
+/// `'*'` may only appear as the first character. When multiple rules match a
+/// request, the most specific one wins (longest literal suffix).
 pub struct DomainRule {
-    /// Original glob pattern string, kept for display and diagnostic purposes.
-    pub(crate) _pattern: String,
+    /// Pattern string to match against.
+    pub(crate) pattern: String,
     /// HTTP verbs permitted for domains matching this rule.
     pub allowed_verbs: Vec<HttpVerb>,
-    /// Pre-compiled matcher derived from `pattern`.
-    pub(crate) matcher: GlobMatcher,
+    /// Number of literal characters (pattern length minus any leading `*`).
+    /// Used to pick the most specific matching rule.
+    pub(crate) specificity: usize,
 }
 
 impl DomainRule {
-    /// Creates a new `DomainRule`, compiling the glob pattern eagerly.
+    /// Creates a new `DomainRule`.
     ///
-    /// Returns [`ToolError::InvalidPattern`] if `pattern` is not a valid glob.
+    /// Returns [`ToolError::InvalidPattern`] if `'*'` appears anywhere other
+    /// than the first character.
+    /// Creates a new `DomainRule`.
+    ///
+    /// Returns [`ToolError::InvalidPattern`] if the pattern is not one of:
+    /// - An exact hostname: `"api.example.com"`
+    /// - A subdomain wildcard: `"*.example.com"`
+    /// - A catch-all: `"*"`
     pub fn new(pattern: impl Into<String>, allowed_verbs: Vec<HttpVerb>) -> ToolResult<Self> {
         let pattern = pattern.into();
-        let matcher = Glob::new(&pattern)
-            .map_err(|e| ToolError::InvalidPattern(e.to_string()))?
-            .compile_matcher();
+        let invalid = pattern.contains('*') && pattern != "*" && !pattern.starts_with("*.");
+        if invalid || pattern.chars().skip(1).any(|c| c == '*') {
+            return Err(ToolError::InvalidPattern(format!(
+                "domain pattern must be an exact hostname, '*', or '*.suffix', got: '{pattern}'"
+            )));
+        }
+        let specificity = pattern.trim_start_matches('*').len();
         Ok(DomainRule {
-            _pattern: pattern,
+            pattern,
             allowed_verbs,
-            matcher,
+            specificity,
         })
+    }
+
+    /// Returns `true` if this rule matches `host`.
+    pub(crate) fn matches(&self, host: &str) -> bool {
+        match self.pattern.strip_prefix('*') {
+            Some(suffix) => host.ends_with(suffix),
+            None => host == self.pattern,
+        }
     }
 }
 
@@ -132,18 +151,20 @@ impl HttpConfig {
         self
     }
 
-    /// Finds the allowed verbs for `host` by matching domain rules in order.
+    /// Returns the allowed verbs for `host` from the most specific matching rule.
     /// Returns `Err(PermissionDenied)` if no rule matches.
     pub(crate) fn allowed_verbs_for(&self, host: &str) -> crate::ToolResult<&[HttpVerb]> {
-        for rule in &self.domain_rules {
-            if rule.matcher.is_match(host) {
-                return Ok(&rule.allowed_verbs);
-            }
-        }
-        Err(crate::ToolError::PermissionDenied(format!(
-            "host '{}' is not allowed by any domain rule",
-            host
-        )))
+        self.domain_rules
+            .iter()
+            .filter(|rule| rule.matches(host))
+            .max_by_key(|rule| rule.specificity)
+            .map(|rule| rule.allowed_verbs.as_slice())
+            .ok_or_else(|| {
+                crate::ToolError::PermissionDenied(format!(
+                    "host '{}' is not allowed by any domain rule",
+                    host
+                ))
+            })
     }
 }
 
@@ -161,7 +182,7 @@ impl Sandbox {
     /// Opens `path` as the jail root. All subsequent tool operations are
     /// confined to this directory — no ambient filesystem access occurs.
     ///
-    /// HTTP fetching is disabled by default; configure [`Sandbox::http`] to enable it.
+    /// HTTP fetching is disabled by default; set [`Sandbox::set_http`] to enable it.
     pub fn new(path: impl AsRef<Path>) -> ToolResult<Self> {
         let root = Dir::open_ambient_dir(&path, ambient_authority())
             .map_err(|e| map_io_err(&path.as_ref().to_string_lossy(), e))?;
@@ -170,6 +191,11 @@ impl Sandbox {
             read_registry: Arc::new(Mutex::new(HashMap::new())),
             http: HttpConfig::default(),
         })
+    }
+
+    /// Replaces the HTTP configuration. Enables the `fetch` tool with the given config.
+    pub fn set_http(&mut self, config: HttpConfig) {
+        self.http = config;
     }
 }
 
@@ -200,19 +226,34 @@ mod tests {
     use super::*;
 
     #[test]
-    fn first_matching_rule_wins() {
+    fn best_match_wins() {
+        // Rule order is deliberately reversed to confirm it's specificity, not insertion order.
         let config = HttpConfig::new()
-            .allow(DomainRule::new("api.example.com", vec![HttpVerb::Get, HttpVerb::Post]).unwrap())
-            .allow(DomainRule::new("*", vec![HttpVerb::Get]).unwrap());
+            .allow(DomainRule::new("*", vec![HttpVerb::Get]).unwrap())
+            .allow(DomainRule::new("*.example.com", vec![HttpVerb::Post]).unwrap())
+            .allow(DomainRule::new("api.example.com", vec![HttpVerb::Delete]).unwrap());
 
-        // Specific rule matches first — POST is allowed
+        // Exact match is most specific
         let verbs = config.allowed_verbs_for("api.example.com").unwrap();
-        assert!(verbs.contains(&HttpVerb::Post));
+        assert_eq!(verbs, &[HttpVerb::Delete]);
 
-        // Catch-all matches — POST is not in the catch-all verbs
-        let verbs = config.allowed_verbs_for("other.com").unwrap();
-        assert!(!verbs.contains(&HttpVerb::Post));
-        assert!(verbs.contains(&HttpVerb::Get));
+        // Subdomain wildcard beats catch-all
+        let verbs = config.allowed_verbs_for("other.example.com").unwrap();
+        assert_eq!(verbs, &[HttpVerb::Post]);
+
+        // Only catch-all matches
+        let verbs = config.allowed_verbs_for("unrelated.com").unwrap();
+        assert_eq!(verbs, &[HttpVerb::Get]);
+    }
+
+    #[test]
+    fn rejects_wildcard_not_at_start() {
+        assert!(DomainRule::new("api.*.com", vec![]).is_err());
+        assert!(DomainRule::new("*.*.com", vec![]).is_err());
+        assert!(DomainRule::new("api*", vec![]).is_err());
+        // '*' without a following '.' would match across domain boundaries
+        // (e.g. "*test.com" would match "mytest.com" via ends_with).
+        assert!(DomainRule::new("*test.com", vec![]).is_err());
     }
 
     #[test]
