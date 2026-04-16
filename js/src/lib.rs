@@ -6,12 +6,13 @@
 
 use std::collections::BTreeMap;
 
+use napi::bindgen_prelude::This;
 use napi_derive::napi;
 use spadebox_core::{
-  Sandbox,
+  DomainRule, HttpVerb, Sandbox,
   tools::{
-    EditFileTool, EditParams, GlobParams, GlobTool, GrepParams, GrepTool, ReadFileTool, ReadParams,
-    Tool, WriteFileTool, WriteParams,
+    EditFileTool, EditParams, FetchParams, FetchTool, GlobParams, GlobTool, GrepParams, GrepTool,
+    ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
   },
 };
 
@@ -62,11 +63,12 @@ fn make_tool_entry<T: Tool>() -> ToolEntry {
 fn build_tools() -> BTreeMap<&'static str, ToolEntry> {
   let mut map = BTreeMap::new();
   for entry in [
-    make_tool_entry::<EditFileTool>(),
     make_tool_entry::<GlobTool>(),
     make_tool_entry::<GrepTool>(),
     make_tool_entry::<ReadFileTool>(),
     make_tool_entry::<WriteFileTool>(),
+    make_tool_entry::<EditFileTool>(),
+    make_tool_entry::<FetchTool>(),
   ] {
     map.insert(entry.name, entry);
   }
@@ -205,6 +207,61 @@ impl SpadeBox {
     )
     .await
     .map_err(to_napi_err)
+  }
+
+  /// Enable HTTP fetching. Returns `this` for chaining with `allow`.
+  ///
+  /// ```js
+  /// sb.enableHttp().allow('api.example.com', ['GET', 'POST']).allow('*.cdn.example.com', ['GET']);
+  /// ```
+  #[napi]
+  pub fn enable_http<'env>(&mut self, this: This<'env>) -> This<'env> {
+    self.inner.http.enable();
+    this
+  }
+
+  /// Add a domain rule permitting the given HTTP verbs for `pattern`.
+  ///
+  /// `pattern` may be an exact hostname (`"api.example.com"`), a wildcard
+  /// subdomain (`"*.example.com"`), or a catch-all (`"*"`). When multiple rules
+  /// match a request, the most specific one wins (longest literal suffix).
+  /// Returns `this` for chaining.
+  ///
+  /// Throws if `pattern` is invalid or any verb is unrecognised.
+  #[napi]
+  pub fn allow<'env>(
+    &mut self,
+    pattern: String,
+    verbs: Vec<String>,
+    this: This<'env>,
+  ) -> napi::Result<This<'env>> {
+    let parsed_verbs = verbs
+      .iter()
+      .map(|v| {
+        HttpVerb::from_str(v.to_uppercase().as_str())
+          .ok_or_else(|| napi::Error::from_reason(format!("unknown HTTP verb '{v}'")))
+      })
+      .collect::<napi::Result<Vec<_>>>()?;
+    let rule = DomainRule::new(pattern, parsed_verbs).map_err(to_napi_err)?;
+    self.inner.http.allow(rule);
+    Ok(this)
+  }
+
+  /// Perform an HTTP request and return the response body as text.
+  ///
+  /// HTTP must be enabled first via `enableHttp`. The `url` must use the `http`
+  /// or `https` scheme. `method` is case-insensitive (e.g. `"GET"`, `"POST"`).
+  /// Pass `body` for methods that send a request body (POST, PUT, PATCH).
+  #[napi]
+  pub async fn fetch(
+    &self,
+    url: String,
+    method: String,
+    body: Option<String>,
+  ) -> napi::Result<String> {
+    FetchTool::run(&self.inner, FetchParams { url, method, body })
+      .await
+      .map_err(to_napi_err)
   }
 
   /// Replace text within a file. Calls the `edit_file` tool directly.

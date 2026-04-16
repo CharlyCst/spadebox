@@ -3,7 +3,7 @@
  *
  * Usage:
  *   deno run --allow-read --allow-write --allow-env=MISTRAL_API_KEY \
- *            --allow-ffi --allow-net=api.mistral.ai \
+ *            --allow-ffi --allow-net \
  *            example/mistral.ts /absolute/path/to/sandbox
  */
 
@@ -49,6 +49,7 @@ if (!apiKey) {
 // --- Setup SpadeBox and tools ---
 
 const sb = new SpadeBox(sandboxPath)
+sb.enableHttp().allow('*', ['GET', 'HEAD'])
 
 // Convert SpadeBox tool metadata to the Mistral tool definition format
 const tools = sb.tools().map((t: SbTool) => ({
@@ -133,7 +134,8 @@ async function runTurn(messages: Message[]): Promise<void> {
 const SYSTEM_PROMPT = `You are a todo list manager. Maintain the user's todo list in a file called todos.md.
 
 Use markdown checkboxes: \`- [ ]\` for pending items, \`- [x]\` for completed ones.
-Always read todos.md before making changes. Keep your replies short — just confirm what you did.`
+Always read todos.md before making changes. Keep your replies short — just confirm what you did.
+You can also fetch URLs to look up information when needed.`
 
 const messages: Message[] = [{ role: 'system', content: SYSTEM_PROMPT }]
 

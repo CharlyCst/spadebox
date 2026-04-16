@@ -57,6 +57,33 @@ export declare class SpadeBox {
    */
   grep(pattern: string, glob?: string | undefined | null, contextLines?: number | undefined | null): Promise<string>
   /**
+   * Enable HTTP fetching. Returns `this` for chaining with `allow`.
+   *
+   * ```js
+   * sb.enableHttp().allow('api.example.com', ['GET', 'POST']).allow('*.cdn.example.com', ['GET']);
+   * ```
+   */
+  enableHttp(): this
+  /**
+   * Add a domain rule permitting the given HTTP verbs for `pattern`.
+   *
+   * `pattern` may be an exact hostname (`"api.example.com"`), a wildcard
+   * subdomain (`"*.example.com"`), or a catch-all (`"*"`). When multiple rules
+   * match a request, the most specific one wins (longest literal suffix).
+   * Returns `this` for chaining.
+   *
+   * Throws if `pattern` is invalid or any verb is unrecognised.
+   */
+  allow(pattern: string, verbs: Array<string>): this
+  /**
+   * Perform an HTTP request and return the response body as text.
+   *
+   * HTTP must be enabled first via `enableHttp`. The `url` must use the `http`
+   * or `https` scheme. `method` is case-insensitive (e.g. `"GET"`, `"POST"`).
+   * Pass `body` for methods that send a request body (POST, PUT, PATCH).
+   */
+  fetch(url: string, method: string, body?: string | undefined | null): Promise<string>
+  /**
    * Replace text within a file. Calls the `edit_file` tool directly.
    *
    * Finds the exact string `oldString` in the file at `path` and replaces it
