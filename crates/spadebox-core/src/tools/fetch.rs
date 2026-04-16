@@ -151,7 +151,10 @@ mod tests {
     #[tokio::test]
     async fn rejects_unknown_scheme() {
         let (_dir, mut sandbox) = setup_sandbox();
-        sandbox.http.enable().allow(DomainRule::new("*", vec![HttpVerb::Get]).unwrap());
+        sandbox
+            .http
+            .enable()
+            .allow(DomainRule::new("*", vec![HttpVerb::Get]).unwrap());
         let result = FetchTool::run(
             &sandbox,
             FetchParams {
@@ -167,7 +170,10 @@ mod tests {
     #[tokio::test]
     async fn rejects_unmatched_domain() {
         let (_dir, mut sandbox) = setup_sandbox();
-        sandbox.http.enable().allow(DomainRule::new("*.example.com", vec![HttpVerb::Get]).unwrap());
+        sandbox
+            .http
+            .enable()
+            .allow(DomainRule::new("*.example.com", vec![HttpVerb::Get]).unwrap());
         let result = FetchTool::run(
             &sandbox,
             FetchParams {
@@ -183,7 +189,10 @@ mod tests {
     #[tokio::test]
     async fn rejects_disallowed_verb() {
         let (_dir, mut sandbox) = setup_sandbox();
-        sandbox.http.enable().allow(DomainRule::new("example.com", vec![HttpVerb::Get]).unwrap());
+        sandbox
+            .http
+            .enable()
+            .allow(DomainRule::new("example.com", vec![HttpVerb::Get]).unwrap());
         let result = FetchTool::run(
             &sandbox,
             FetchParams {
