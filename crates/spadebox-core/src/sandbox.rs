@@ -121,9 +121,15 @@ impl DomainRule {
 /// # Example
 ///
 /// ```
-/// use spadebox_core::{HttpConfig, DomainRule, HttpVerb};
+/// use spadebox_core::Sandbox;
+/// use spadebox_core::{DomainRule, HttpVerb};
+/// # use tempfile::TempDir;
+/// # let dir = TempDir::new().unwrap();
+/// # let path = dir.path();
 ///
-/// let config = HttpConfig::new()
+/// let mut sandbox = Sandbox::new(path).unwrap();
+/// sandbox.http
+///     .enable()
 ///     .allow(DomainRule::new("api.example.com", vec![HttpVerb::Get, HttpVerb::Post]).unwrap())
 ///     .allow(DomainRule::new("*.cdn.example.com", vec![HttpVerb::Get]).unwrap());
 /// ```
@@ -135,18 +141,14 @@ pub struct HttpConfig {
 }
 
 impl HttpConfig {
-    /// Creates an enabled `HttpConfig` with no domain rules.
-    ///
-    /// Add rules with [`HttpConfig::allow`].
-    pub fn new() -> Self {
-        HttpConfig {
-            enabled: true,
-            domain_rules: Vec::new(),
-        }
+    /// Enables HTTP fetching and returns `&mut self` for chaining.
+    pub fn enable(&mut self) -> &mut Self {
+        self.enabled = true;
+        self
     }
 
-    /// Appends a domain rule and returns `self` for chaining.
-    pub fn allow(mut self, rule: DomainRule) -> Self {
+    /// Appends a domain rule and returns `&mut self` for chaining.
+    pub fn allow(&mut self, rule: DomainRule) -> &mut Self {
         self.domain_rules.push(rule);
         self
     }
@@ -175,14 +177,14 @@ impl HttpConfig {
 pub struct Sandbox {
     pub(crate) root: Dir,
     pub(crate) read_registry: Registry,
-    pub(crate) http: HttpConfig,
+    pub http: HttpConfig,
 }
 
 impl Sandbox {
     /// Opens `path` as the jail root. All subsequent tool operations are
     /// confined to this directory — no ambient filesystem access occurs.
     ///
-    /// HTTP fetching is disabled by default; set [`Sandbox::set_http`] to enable it.
+    /// HTTP fetching is disabled by default; call `sandbox.http.enable()` to enable it.
     pub fn new(path: impl AsRef<Path>) -> ToolResult<Self> {
         let root = Dir::open_ambient_dir(&path, ambient_authority())
             .map_err(|e| map_io_err(&path.as_ref().to_string_lossy(), e))?;
@@ -191,11 +193,6 @@ impl Sandbox {
             read_registry: Arc::new(Mutex::new(HashMap::new())),
             http: HttpConfig::default(),
         })
-    }
-
-    /// Replaces the HTTP configuration. Enables the `fetch` tool with the given config.
-    pub fn set_http(&mut self, config: HttpConfig) {
-        self.http = config;
     }
 }
 
@@ -228,7 +225,8 @@ mod tests {
     #[test]
     fn best_match_wins() {
         // Rule order is deliberately reversed to confirm it's specificity, not insertion order.
-        let config = HttpConfig::new()
+        let mut config = HttpConfig::default();
+        config
             .allow(DomainRule::new("*", vec![HttpVerb::Get]).unwrap())
             .allow(DomainRule::new("*.example.com", vec![HttpVerb::Post]).unwrap())
             .allow(DomainRule::new("api.example.com", vec![HttpVerb::Delete]).unwrap());

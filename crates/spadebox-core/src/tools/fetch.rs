@@ -122,13 +122,12 @@ impl Tool for FetchTool {
 mod tests {
     use super::*;
     use crate::Sandbox;
-    use crate::sandbox::{DomainRule, HttpConfig, HttpVerb};
+    use crate::sandbox::{DomainRule, HttpVerb};
     use tempfile::TempDir;
 
-    fn setup_sandbox(http: HttpConfig) -> (TempDir, Sandbox) {
+    fn setup_sandbox() -> (TempDir, Sandbox) {
         let dir = TempDir::new().unwrap();
-        let mut sandbox = Sandbox::new(dir.path()).unwrap();
-        sandbox.http = http;
+        let sandbox = Sandbox::new(dir.path()).unwrap();
         (dir, sandbox)
     }
 
@@ -136,8 +135,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_when_disabled() {
-        let dir = TempDir::new().unwrap();
-        let sandbox = Sandbox::new(dir.path()).unwrap(); // http disabled by default
+        let (_dir, sandbox) = setup_sandbox(); // http disabled by default
         let result = FetchTool::run(
             &sandbox,
             FetchParams {
@@ -152,9 +150,8 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_unknown_scheme() {
-        let (_dir, sandbox) = setup_sandbox(
-            HttpConfig::new().allow(DomainRule::new("*", vec![HttpVerb::Get]).unwrap()),
-        );
+        let (_dir, mut sandbox) = setup_sandbox();
+        sandbox.http.enable().allow(DomainRule::new("*", vec![HttpVerb::Get]).unwrap());
         let result = FetchTool::run(
             &sandbox,
             FetchParams {
@@ -169,9 +166,8 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_unmatched_domain() {
-        let (_dir, sandbox) = setup_sandbox(
-            HttpConfig::new().allow(DomainRule::new("*.example.com", vec![HttpVerb::Get]).unwrap()),
-        );
+        let (_dir, mut sandbox) = setup_sandbox();
+        sandbox.http.enable().allow(DomainRule::new("*.example.com", vec![HttpVerb::Get]).unwrap());
         let result = FetchTool::run(
             &sandbox,
             FetchParams {
@@ -186,9 +182,8 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_disallowed_verb() {
-        let (_dir, sandbox) = setup_sandbox(
-            HttpConfig::new().allow(DomainRule::new("example.com", vec![HttpVerb::Get]).unwrap()),
-        );
+        let (_dir, mut sandbox) = setup_sandbox();
+        sandbox.http.enable().allow(DomainRule::new("example.com", vec![HttpVerb::Get]).unwrap());
         let result = FetchTool::run(
             &sandbox,
             FetchParams {
