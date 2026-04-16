@@ -74,7 +74,7 @@ impl Tool for FetchTool {
 
         // Validate the requested method against the rule.
         let method_upper = params.method.to_uppercase();
-        let verb = HttpVerb::from_str(&method_upper).ok_or_else(|| {
+        let verb = HttpVerb::parse(&method_upper).ok_or_else(|| {
             ToolError::PermissionDenied(format!("unknown HTTP method '{}'", params.method))
         })?;
 

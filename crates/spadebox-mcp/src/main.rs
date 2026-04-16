@@ -43,7 +43,10 @@ impl ServerHandler for SpadeboxMcpServer {
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
         Ok(ListToolsResult {
-            tools: enabled_tools(&self.sandbox).into_iter().map(to_mcp_tool).collect(),
+            tools: enabled_tools(&self.sandbox)
+                .into_iter()
+                .map(to_mcp_tool)
+                .collect(),
             ..Default::default()
         })
     }
@@ -53,9 +56,9 @@ impl ServerHandler for SpadeboxMcpServer {
         request: CallToolRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
-        let args = serde_json::to_string(
-            &serde_json::Value::Object(request.arguments.unwrap_or_default()),
-        )
+        let args = serde_json::to_string(&serde_json::Value::Object(
+            request.arguments.unwrap_or_default(),
+        ))
         .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
 
         match spadebox_core::call_tool(&self.sandbox, &request.name, args).await {

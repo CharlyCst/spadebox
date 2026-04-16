@@ -30,6 +30,14 @@ pub enum HttpVerb {
     Head,
 }
 
+impl std::str::FromStr for HttpVerb {
+    type Err = ();
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        HttpVerb::parse(s).ok_or(())
+    }
+}
+
 impl HttpVerb {
     /// Returns the uppercase string representation (e.g. `"GET"`).
     pub fn as_str(&self) -> &'static str {
@@ -45,7 +53,7 @@ impl HttpVerb {
 
     /// Parses an uppercase HTTP method string into an [`HttpVerb`].
     /// Returns `None` if the method is not recognised.
-    pub fn from_str(method: &str) -> Option<Self> {
+    pub fn parse(method: &str) -> Option<Self> {
         match method {
             "GET" => Some(HttpVerb::Get),
             "POST" => Some(HttpVerb::Post),
@@ -314,12 +322,12 @@ mod tests {
 
     #[test]
     fn parse_verb_recognizes_known_verbs() {
-        assert_eq!(HttpVerb::from_str("GET"), Some(HttpVerb::Get));
-        assert_eq!(HttpVerb::from_str("POST"), Some(HttpVerb::Post));
-        assert_eq!(HttpVerb::from_str("PUT"), Some(HttpVerb::Put));
-        assert_eq!(HttpVerb::from_str("PATCH"), Some(HttpVerb::Patch));
-        assert_eq!(HttpVerb::from_str("DELETE"), Some(HttpVerb::Delete));
-        assert_eq!(HttpVerb::from_str("HEAD"), Some(HttpVerb::Head));
-        assert_eq!(HttpVerb::from_str("UNKNOWN"), None);
+        assert_eq!(HttpVerb::parse("GET"), Some(HttpVerb::Get));
+        assert_eq!(HttpVerb::parse("POST"), Some(HttpVerb::Post));
+        assert_eq!(HttpVerb::parse("PUT"), Some(HttpVerb::Put));
+        assert_eq!(HttpVerb::parse("PATCH"), Some(HttpVerb::Patch));
+        assert_eq!(HttpVerb::parse("DELETE"), Some(HttpVerb::Delete));
+        assert_eq!(HttpVerb::parse("HEAD"), Some(HttpVerb::Head));
+        assert_eq!(HttpVerb::parse("UNKNOWN"), None);
     }
 }

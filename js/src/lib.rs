@@ -1,4 +1,3 @@
-#![deny(clippy::all)]
 // Doc comments in this file are surfaced as JavaScript API documentation via
 // NAPI-RS. Use camelCase for parameter and field names in doc comments to match
 // the JavaScript calling convention (NAPI-RS converts snake_case identifiers to
@@ -53,6 +52,8 @@ impl SpadeBox {
   ///
   /// Call `enableFiles` to enable filesystem tools and `enableHttp` to enable
   /// HTTP fetching.
+  // `Default` is not meaningful for a NAPI class exposed to JavaScript.
+  #[allow(clippy::new_without_default)]
   #[napi(constructor)]
   pub fn new() -> Self {
     Self {
@@ -65,11 +66,7 @@ impl SpadeBox {
   /// All file-system operations are restricted to this directory. Returns
   /// `this` for chaining. Throws if `path` cannot be opened.
   #[napi]
-  pub fn enable_files<'env>(
-    &mut self,
-    path: String,
-    this: This<'env>,
-  ) -> napi::Result<This<'env>> {
+  pub fn enable_files<'env>(&mut self, path: String, this: This<'env>) -> napi::Result<This<'env>> {
     self.inner.files.enable(&path).map_err(to_napi_err)?;
     Ok(this)
   }
@@ -214,7 +211,7 @@ impl SpadeBox {
     let parsed_verbs = verbs
       .iter()
       .map(|v| {
-        HttpVerb::from_str(v.to_uppercase().as_str())
+        HttpVerb::parse(v.to_uppercase().as_str())
           .ok_or_else(|| napi::Error::from_reason(format!("unknown HTTP verb '{v}'")))
       })
       .collect::<napi::Result<Vec<_>>>()?;
