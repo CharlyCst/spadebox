@@ -123,11 +123,8 @@ impl DomainRule {
 /// ```
 /// use spadebox_core::Sandbox;
 /// use spadebox_core::{DomainRule, HttpVerb};
-/// # use tempfile::TempDir;
-/// # let dir = TempDir::new().unwrap();
-/// # let path = dir.path();
 ///
-/// let mut sandbox = Sandbox::new(path).unwrap();
+/// let mut sandbox = Sandbox::new();
 /// sandbox.http
 ///     .enable()
 ///     .allow(DomainRule::new("api.example.com", vec![HttpVerb::Get, HttpVerb::Post]).unwrap())
@@ -171,28 +168,79 @@ impl HttpConfig {
 }
 
 // ---------------------------------------------------------------------------
+// Filesystem configuration
+// ---------------------------------------------------------------------------
+
+/// Configuration for filesystem tools (`read_file`, `write_file`, `edit_file`,
+/// `glob`, `grep`).
+///
+/// When `root` is `None`, all filesystem tool calls return a permission error.
+///
+/// # Example
+///
+/// ```
+/// use spadebox_core::Sandbox;
+/// # use tempfile::TempDir;
+/// # let dir = TempDir::new().unwrap();
+///
+/// let mut sandbox = Sandbox::new();
+/// sandbox.files.enable(dir.path()).unwrap();
+/// ```
+#[derive(Default)]
+pub struct FilesConfig {
+    pub(crate) root: Option<Dir>,
+    pub(crate) read_registry: Registry,
+}
+
+impl FilesConfig {
+    /// Opens `path` as the sandbox root and resets the read registry.
+    ///
+    /// Resets the registry so stale read records from a previous root do not
+    /// carry over. Returns `&mut self` for consistency; filesystem tools are
+    /// enabled as soon as this call succeeds.
+    pub fn enable(&mut self, path: impl AsRef<Path>) -> ToolResult<&mut Self> {
+        let root = Dir::open_ambient_dir(&path, ambient_authority())
+            .map_err(|e| map_io_err(&path.as_ref().to_string_lossy(), e))?;
+        self.root = Some(root);
+        self.read_registry = Arc::new(Mutex::new(HashMap::new()));
+        Ok(self)
+    }
+
+    /// Returns a clone of the root `Dir`, or `Err(PermissionDenied)` if
+    /// filesystem tools are disabled.
+    pub(crate) fn try_clone_root(&self) -> ToolResult<Dir> {
+        self.root
+            .as_ref()
+            .ok_or_else(|| ToolError::PermissionDenied("filesystem access is disabled".into()))?
+            .try_clone()
+            .map_err(ToolError::IoError)
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Sandbox
 // ---------------------------------------------------------------------------
 
 pub struct Sandbox {
-    pub(crate) root: Dir,
-    pub(crate) read_registry: Registry,
+    pub files: FilesConfig,
     pub http: HttpConfig,
 }
 
 impl Sandbox {
-    /// Opens `path` as the jail root. All subsequent tool operations are
-    /// confined to this directory — no ambient filesystem access occurs.
-    ///
-    /// HTTP fetching is disabled by default; call `sandbox.http.enable()` to enable it.
-    pub fn new(path: impl AsRef<Path>) -> ToolResult<Self> {
-        let root = Dir::open_ambient_dir(&path, ambient_authority())
-            .map_err(|e| map_io_err(&path.as_ref().to_string_lossy(), e))?;
-        Ok(Sandbox {
-            root,
-            read_registry: Arc::new(Mutex::new(HashMap::new())),
+    /// Creates a new `Sandbox` with filesystem tools and HTTP fetching both
+    /// disabled. Call `sandbox.files.enable(path)` and/or
+    /// `sandbox.http.enable()` to activate them.
+    pub fn new() -> Self {
+        Sandbox {
+            files: FilesConfig::default(),
             http: HttpConfig::default(),
-        })
+        }
+    }
+}
+
+impl Default for Sandbox {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -46,8 +46,8 @@ impl Tool for WriteFileTool {
         // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
         // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
         // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox.root.try_clone().map_err(ToolError::IoError)?;
-        let registry = Arc::clone(&sandbox.read_registry);
+        let root = sandbox.files.try_clone_root()?;
+        let registry = Arc::clone(&sandbox.files.read_registry);
 
         // All filesystem operations (create_dir_all, create, write_all) are
         // blocking syscalls. Run them on a dedicated thread to avoid stalling
@@ -122,7 +122,8 @@ mod tests {
 
     fn setup() -> (TempDir, Sandbox) {
         let dir = TempDir::new().unwrap();
-        let sandbox = Sandbox::new(dir.path()).unwrap();
+        let mut sandbox = Sandbox::new();
+        sandbox.files.enable(dir.path()).unwrap();
         (dir, sandbox)
     }
 

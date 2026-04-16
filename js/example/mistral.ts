@@ -48,7 +48,8 @@ if (!apiKey) {
 
 // --- Setup SpadeBox and tools ---
 
-const sb = new SpadeBox(sandboxPath)
+const sb = new SpadeBox()
+sb.enableFiles(sandboxPath)
 sb.enableHttp().allow('*', ['GET', 'HEAD'])
 
 // Convert SpadeBox tool metadata to the Mistral tool definition format

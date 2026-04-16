@@ -116,7 +116,10 @@ impl ServerHandler for SpadeboxMcpServer {
 async fn main() -> anyhow::Result<()> {
     let sandbox_root = std::env::args().nth(1).unwrap_or_else(|| ".".to_string());
 
-    let sandbox = Sandbox::new(&sandbox_root)
+    let mut sandbox = Sandbox::new();
+    sandbox
+        .files
+        .enable(&sandbox_root)
         .map_err(|e| anyhow::anyhow!("Failed to open sandbox at {sandbox_root:?}: {e}"))?;
 
     let service = SpadeboxMcpServer::new(sandbox)

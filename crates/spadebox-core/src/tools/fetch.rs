@@ -123,19 +123,16 @@ mod tests {
     use super::*;
     use crate::Sandbox;
     use crate::sandbox::{DomainRule, HttpVerb};
-    use tempfile::TempDir;
 
-    fn setup_sandbox() -> (TempDir, Sandbox) {
-        let dir = TempDir::new().unwrap();
-        let sandbox = Sandbox::new(dir.path()).unwrap();
-        (dir, sandbox)
+    fn setup_sandbox() -> Sandbox {
+        Sandbox::new()
     }
 
     // --- Permission checks (no network) ---
 
     #[tokio::test]
     async fn rejects_when_disabled() {
-        let (_dir, sandbox) = setup_sandbox(); // http disabled by default
+        let sandbox = setup_sandbox(); // http disabled by default
         let result = FetchTool::run(
             &sandbox,
             FetchParams {
@@ -150,7 +147,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_unknown_scheme() {
-        let (_dir, mut sandbox) = setup_sandbox();
+        let mut sandbox = setup_sandbox();
         sandbox
             .http
             .enable()
@@ -169,7 +166,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_unmatched_domain() {
-        let (_dir, mut sandbox) = setup_sandbox();
+        let mut sandbox = setup_sandbox();
         sandbox
             .http
             .enable()
@@ -188,7 +185,7 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_disallowed_verb() {
-        let (_dir, mut sandbox) = setup_sandbox();
+        let mut sandbox = setup_sandbox();
         sandbox
             .http
             .enable()

@@ -2,13 +2,19 @@
 /* eslint-disable */
 export declare class SpadeBox {
   /**
-   * Create a new SpadeBox instance.
+   * Create a new SpadeBox instance with all tools disabled.
    *
-   * `sandboxRoot` is the absolute path to the root directory of the
-   * filesystem sandbox. All file-system operations are restricted to this
-   * directory.
+   * Call `enableFiles` to enable filesystem tools and `enableHttp` to enable
+   * HTTP fetching.
    */
-  constructor(sandboxRoot: string)
+  constructor()
+  /**
+   * Enable filesystem tools with `path` as the sandbox root.
+   *
+   * All file-system operations are restricted to this directory. Returns
+   * `this` for chaining. Throws if `path` cannot be opened.
+   */
+  enableFiles(path: string): this
   /** Returns metadata for all available tools, ordered by name. */
   tools(): Array<SbTool>
   /**

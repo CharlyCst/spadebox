@@ -83,19 +83,30 @@ pub struct SpadeBox {
 
 #[napi]
 impl SpadeBox {
-  /// Create a new SpadeBox instance.
+  /// Create a new SpadeBox instance with all tools disabled.
   ///
-  /// `sandboxRoot` is the absolute path to the root directory of the
-  /// filesystem sandbox. All file-system operations are restricted to this
-  /// directory.
+  /// Call `enableFiles` to enable filesystem tools and `enableHttp` to enable
+  /// HTTP fetching.
   #[napi(constructor)]
-  pub fn new(sandbox_root: String) -> napi::Result<Self> {
-    Sandbox::new(&sandbox_root)
-      .map(|inner| Self {
-        inner,
-        tools: build_tools(),
-      })
-      .map_err(to_napi_err)
+  pub fn new() -> Self {
+    Self {
+      inner: Sandbox::new(),
+      tools: build_tools(),
+    }
+  }
+
+  /// Enable filesystem tools with `path` as the sandbox root.
+  ///
+  /// All file-system operations are restricted to this directory. Returns
+  /// `this` for chaining. Throws if `path` cannot be opened.
+  #[napi]
+  pub fn enable_files<'env>(
+    &mut self,
+    path: String,
+    this: This<'env>,
+  ) -> napi::Result<This<'env>> {
+    self.inner.files.enable(&path).map_err(to_napi_err)?;
+    Ok(this)
   }
 
   /// Returns metadata for all available tools, ordered by name.
