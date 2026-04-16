@@ -40,12 +40,15 @@ if (!sandboxPath) {
 
 // --- Setup SpadeBox ---
 
+// [snippet: setup]
 const sb = new SpadeBox()
 sb.enableFiles(sandboxPath)
   .enableJs()
   .enableHttp()
   .allow('*', ['GET', 'HEAD'])
+// [/snippet]
 
+// [snippet: tool-definitions]
 const tools = sb.tools().map((t) => ({
   type: 'function' as const,
   function: {
@@ -54,6 +57,7 @@ const tools = sb.tools().map((t) => ({
     parameters: JSON.parse(t.inputSchema),
   },
 }))
+// [/snippet]
 
 // --- Types ---
 
@@ -95,6 +99,7 @@ async function chat(messages: Message[]): Promise<AssistantMessage> {
 
 // --- Agent loop ---
 
+// [snippet: agent-loop]
 async function runTurn(messages: Message[]): Promise<void> {
   while (true) {
     const response = await chat(messages)
@@ -117,6 +122,7 @@ async function runTurn(messages: Message[]): Promise<void> {
     }
   }
 }
+// [/snippet]
 
 // --- Main ---
 

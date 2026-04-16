@@ -7,11 +7,8 @@
 
 
 <div align="center">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="https://github.com/user-attachments/assets/2f832204-4edc-477a-aec5-f5268aea4756">
-    <source media="(prefers-color-scheme: light)" srcset="https://github.com/user-attachments/assets/d0611572-8b35-4d7e-9be1-b1143af419e1">
-    <img src="https://github.com/user-attachments/assets/d0611572-8b35-4d7e-9be1-b1143af419e1" width="200px" alt="The Spadebox logo"/>
-  </picture>
+  <img src="https://github.com/user-attachments/assets/d0611572-8b35-4d7e-9be1-b1143af419e1" width="200px" alt="The Spadebox logo" class="gh-light-mode-only"/>
+  <img src="https://github.com/user-attachments/assets/2f832204-4edc-477a-aec5-f5268aea4756" width="200px" alt="The Spadebox logo" class="gh-dark-mode-only"/>
 </div>
 <br/>
 

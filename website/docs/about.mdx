@@ -1,0 +1,15 @@
+---
+sidebar_position: 1
+---
+
+# About
+
+SpadeBox provides a set of tools for AI agents with bindings in multiple languages and built-in lightweight sandboxing.
+SpadeBox is especially useful for building agents and AI tools that can run on your machine without heavyweight sandboxing such as VMs or containers.
+
+## Lightweight Sandboxing
+
+SpadeBox provides three categories of tools: file operations, HTTP, and JavaScript execution.
+File system access is mediated by [`cap-std`](https://github.com/bytecodealliance/cap-std) to prevent sandbox escape, HTTP fetch uses a domain allow-list, and JavaScript execution uses the [Boa](https://boajs.dev/) engine with the same `cap-std` and allow-list permissions.
+Most notably, SpadeBox does _not_ provide a `bash` tool, and is designed to work well without needing one.
+

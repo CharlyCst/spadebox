@@ -1,0 +1,325 @@
+---
+sidebar_position: 2
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# Quick Start
+
+SpadeBox provides a set of sandboxed tools for AI agents: file system access, HTTP fetching, and a JavaScript REPL. This page shows how to get up and running in Rust, JavaScript, and Python.
+
+## Installation
+
+<Tabs groupId="lang">
+  <TabItem value="rust" label="Rust">
+
+Add `spadebox-core` to your `Cargo.toml`:
+
+```toml
+[dependencies]
+spadebox-core = "0.3"
+tokio = { version = "1", features = ["full"] }
+```
+
+  </TabItem>
+  <TabItem value="js" label="JavaScript / TypeScript">
+
+Install the package from npm:
+
+```bash
+npm install @spadebox/spadebox
+```
+
+Or with Deno, import directly from npm:
+
+```ts
+import { SpadeBox } from 'npm:@spadebox/spadebox';
+```
+
+  </TabItem>
+  <TabItem value="python" label="Python">
+
+Install the package from PyPI:
+
+```bash
+uv add spadebox
+```
+
+  </TabItem>
+</Tabs>
+
+## Creating a Sandbox
+
+Start by creating a `SpadeBox` (or `Sandbox` in Rust) and enabling the tools you need. All tools are **disabled by default** — you opt in explicitly.
+
+<Tabs groupId="lang">
+  <TabItem value="rust" label="Rust">
+
+```rust
+use spadebox_core::{Sandbox, DomainRule, HttpVerb};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let mut sandbox = Sandbox::new();
+
+    // Enable filesystem tools — restrict access to /workspace
+    sandbox.files.enable("/workspace")?;
+
+    // Enable HTTP — allow GET requests to api.example.com only
+    sandbox.http
+        .enable()
+        .allow(DomainRule::new("api.example.com", vec![HttpVerb::Get])?);
+
+    // Enable the JavaScript REPL
+    sandbox.js.enable();
+
+    Ok(())
+}
+```
+
+  </TabItem>
+  <TabItem value="js" label="JavaScript / TypeScript">
+
+{/* snippet: examples/js/agent.ts#setup */}
+```ts
+const sb = new SpadeBox()
+sb.enableFiles(sandboxPath)
+  .enableJs()
+  .enableHttp()
+  .allow('*', ['GET', 'HEAD'])
+```
+{/* /snippet */}
+
+  </TabItem>
+  <TabItem value="python" label="Python">
+
+{/* snippet: examples/python/agent.py#setup */}
+```python
+sb = SpadeBox()
+sb.enable_files(sandbox_path).enable_js().enable_http().allow("*", ["GET", "HEAD"])
+```
+{/* /snippet */}
+
+  </TabItem>
+</Tabs>
+
+## Listing Available Tools
+
+`SpadeBox` exposes tool metadata in the format expected by LLM tool-calling APIs (name, description, and a JSON Schema for parameters).
+
+<Tabs groupId="lang">
+  <TabItem value="rust" label="Rust">
+
+```rust
+use spadebox_core::enabled_tools;
+
+let tools = enabled_tools(&sandbox);
+
+for tool in &tools {
+    println!("{}: {}", tool.name, tool.description);
+}
+```
+
+  </TabItem>
+  <TabItem value="js" label="JavaScript / TypeScript">
+
+{/* snippet: examples/js/agent.ts#tool-definitions */}
+```ts
+const tools = sb.tools().map((t) => ({
+  type: 'function' as const,
+  function: {
+    name: t.name,
+    description: t.description,
+    parameters: JSON.parse(t.inputSchema),
+  },
+}))
+```
+{/* /snippet */}
+
+  </TabItem>
+  <TabItem value="python" label="Python">
+
+{/* snippet: examples/python/agent.py#tool-definitions */}
+```python
+tools = [
+    {
+        "type": "function",
+        "function": {
+            "name": t.name,
+            "description": t.description,
+            "parameters": json.loads(t.input_schema),
+        },
+    }
+    for t in sb.tools()
+]
+```
+{/* /snippet */}
+
+  </TabItem>
+</Tabs>
+
+## Dispatching Tool Calls
+
+When your LLM returns a tool call, pass the name and JSON-encoded parameters to `call_tool`. The result tells you whether the call succeeded and contains the tool's output.
+
+<Tabs groupId="lang">
+  <TabItem value="rust" label="Rust">
+
+```rust
+use spadebox_core::call_tool;
+
+// Dispatch a tool call from the model
+let result = call_tool(
+    &sandbox,
+    "read_file",
+    r#"{"path": "src/main.rs"}"#.into(),
+).await?;
+
+if result.is_error {
+    eprintln!("Tool error: {}", result.output);
+} else {
+    println!("{}", result.output);
+}
+```
+
+  </TabItem>
+  <TabItem value="js" label="JavaScript / TypeScript">
+
+```ts
+// Dispatch a tool call from the model
+const result = await sb.callTool(
+  'read_file',
+  JSON.stringify({ path: 'src/main.rs' }),
+);
+
+if (result.isError) {
+  console.error('Tool error:', result.output);
+} else {
+  console.log(result.output);
+}
+```
+
+  </TabItem>
+  <TabItem value="python" label="Python">
+
+```python
+# Dispatch a tool call from the model
+result = sb.call_tool(
+    "read_file",
+    '{"path": "src/main.py"}',
+)
+
+if result.is_error:
+    print("Tool error:", result.output, file=sys.stderr)
+else:
+    print(result.output)
+```
+
+  </TabItem>
+</Tabs>
+
+## Full Agent Example
+
+Here is a minimal agent loop that connects SpadeBox to an LLM and drives a multi-turn conversation with tool use:
+
+<Tabs groupId="lang">
+  <TabItem value="rust" label="Rust">
+
+```rust
+use spadebox_core::{Sandbox, enabled_tools, call_tool};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let mut sandbox = Sandbox::new();
+    sandbox.files.enable("/workspace")?;
+
+    // Describe available tools to the LLM
+    let tool_defs = enabled_tools(&sandbox);
+
+    // ... send tool_defs to your LLM, receive a tool call in response ...
+
+    // Dispatch the tool call
+    let result = call_tool(&sandbox, "read_file", r#"{"path":"README.md"}"#.into()).await?;
+
+    // ... send result.output back to the LLM as the tool result ...
+
+    println!("Done: {}", result.output);
+    Ok(())
+}
+```
+
+  </TabItem>
+  <TabItem value="js" label="JavaScript / TypeScript">
+
+{/* snippet: examples/js/agent.ts#agent-loop */}
+```ts
+async function runTurn(messages: Message[]): Promise<void> {
+  while (true) {
+    const response = await chat(messages)
+    messages.push({ role: 'assistant', content: response.content, tool_calls: response.tool_calls })
+
+    if (!response.tool_calls?.length) {
+      if (response.content) console.log(`\n${CYAN}Agent:${RESET} ${response.content}\n`)
+      return
+    }
+
+    for (const call of response.tool_calls) {
+      const { name, arguments: args } = call.function
+      console.log(`\n${BLUE}[call]${RESET} ${GRAY}${name}(${args})${RESET}`)
+
+      const result = await sb.callTool(name, args)
+      const tag = result.isError ? `${RED}[error]${RESET}` : `${GREEN}[ok]${RESET}`
+      console.log(`${tag} ${GRAY}${result.output}${RESET}`)
+
+      messages.push({ role: 'tool', tool_call_id: call.id, content: result.output })
+    }
+  }
+}
+```
+{/* /snippet */}
+
+  </TabItem>
+  <TabItem value="python" label="Python">
+
+{/* snippet: examples/python/agent.py#agent-loop */}
+```python
+def run_turn(messages: list[dict[str, Any]]) -> None:
+    while True:
+        response = chat(messages)
+        messages.append(
+            {
+                "role": "assistant",
+                "content": response.get("content"),
+                "tool_calls": response.get("tool_calls"),
+            }
+        )
+
+        tool_calls = response.get("tool_calls") or []
+        if not tool_calls:
+            content = response.get("content")
+            if content:
+                print(f"\n{CYAN}Agent:{RESET} {content}\n")
+            return
+
+        for call in tool_calls:
+            name = call["function"]["name"]
+            args = call["function"]["arguments"]
+            print(f"\n{BLUE}[call]{RESET} {GRAY}{name}({args}){RESET}")
+
+            result = sb.call_tool(name, args)
+            tag = f"{RED}[error]{RESET}" if result.is_error else f"{GREEN}[ok]{RESET}"
+            print(f"{tag} {GRAY}{result.output}{RESET}")
+
+            messages.append(
+                {"role": "tool", "tool_call_id": call["id"], "content": result.output}
+            )
+```
+{/* /snippet */}
+
+  </TabItem>
+</Tabs>
+
+## Next Steps
+
+- Check out [more examples](https://github.com/CharlyCst/spadebox/blob/main/examples/) in the repository.

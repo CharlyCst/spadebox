@@ -44,9 +44,12 @@ sandbox_path = sys.argv[1]
 
 # --- Setup SpadeBox ---
 
+# [snippet: setup]
 sb = SpadeBox()
 sb.enable_files(sandbox_path).enable_js().enable_http().allow("*", ["GET", "HEAD"])
+# [/snippet]
 
+# [snippet: tool-definitions]
 tools = [
     {
         "type": "function",
@@ -58,6 +61,7 @@ tools = [
     }
     for t in sb.tools()
 ]
+# [/snippet]
 
 # --- API ---
 
@@ -86,6 +90,7 @@ def chat(messages: list[dict[str, Any]]) -> dict[str, Any]:
 # --- Agent loop ---
 
 
+# [snippet: agent-loop]
 def run_turn(messages: list[dict[str, Any]]) -> None:
     while True:
         response = chat(messages)
@@ -116,6 +121,9 @@ def run_turn(messages: list[dict[str, Any]]) -> None:
             messages.append(
                 {"role": "tool", "tool_call_id": call["id"], "content": result.output}
             )
+
+
+# [/snippet]
 
 
 # --- Main ---

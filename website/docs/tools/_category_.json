@@ -1,0 +1,8 @@
+{
+  "label": "Tools",
+  "position": 3,
+  "link": {
+    "type": "generated-index",
+    "description": "Documentation for all SpadeBox tools, as seen by the AI agents"
+  }
+}
