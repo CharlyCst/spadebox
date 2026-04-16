@@ -2,17 +2,13 @@ use std::sync::Arc;
 
 use rmcp::{
     ErrorData as McpError, RoleServer, ServerHandler, ServiceExt,
-    handler::server::tool::schema_for_type,
     model::{
         CallToolRequestParams, CallToolResult, Content, Implementation, ListToolsResult,
         PaginatedRequestParams, ServerCapabilities, ServerInfo, Tool as McpToolDef,
     },
     service::RequestContext,
 };
-use spadebox_core::{
-    Sandbox, Tool,
-    tools::{EditFileTool, FetchTool, GlobTool, GrepTool, ReadFileTool, WriteFileTool},
-};
+use spadebox_core::{Sandbox, ToolDef, enabled_tools};
 
 #[derive(Clone)]
 struct SpadeboxMcpServer {
@@ -27,12 +23,12 @@ impl SpadeboxMcpServer {
     }
 }
 
-/// Build an `rmcp` tool descriptor from a `Tool` implementation.
-fn mcp_tool<T: Tool>() -> McpToolDef
-where
-    T::Params: 'static,
-{
-    McpToolDef::new(T::NAME, T::DESCRIPTION, schema_for_type::<T::Params>())
+fn to_mcp_tool(def: ToolDef) -> McpToolDef {
+    let schema = match def.schema {
+        serde_json::Value::Object(map) => Arc::new(map),
+        _ => Arc::new(serde_json::Map::new()),
+    };
+    McpToolDef::new(def.name, def.description, schema)
 }
 
 impl ServerHandler for SpadeboxMcpServer {
@@ -47,14 +43,7 @@ impl ServerHandler for SpadeboxMcpServer {
         _context: RequestContext<RoleServer>,
     ) -> Result<ListToolsResult, McpError> {
         Ok(ListToolsResult {
-            tools: vec![
-                mcp_tool::<ReadFileTool>(),
-                mcp_tool::<WriteFileTool>(),
-                mcp_tool::<EditFileTool>(),
-                mcp_tool::<GrepTool>(),
-                mcp_tool::<GlobTool>(),
-                mcp_tool::<FetchTool>(),
-            ],
+            tools: enabled_tools(&self.sandbox).into_iter().map(to_mcp_tool).collect(),
             ..Default::default()
         })
     }
@@ -64,50 +53,15 @@ impl ServerHandler for SpadeboxMcpServer {
         request: CallToolRequestParams,
         _context: RequestContext<RoleServer>,
     ) -> Result<CallToolResult, McpError> {
-        let args = serde_json::Value::Object(request.arguments.unwrap_or_default());
+        let args = serde_json::to_string(
+            &serde_json::Value::Object(request.arguments.unwrap_or_default()),
+        )
+        .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
 
-        let result = match request.name.as_ref() {
-            ReadFileTool::NAME => {
-                let params = serde_json::from_value(args)
-                    .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
-                ReadFileTool::run(&self.sandbox, params).await
-            }
-            WriteFileTool::NAME => {
-                let params = serde_json::from_value(args)
-                    .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
-                WriteFileTool::run(&self.sandbox, params).await
-            }
-            EditFileTool::NAME => {
-                let params = serde_json::from_value(args)
-                    .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
-                EditFileTool::run(&self.sandbox, params).await
-            }
-            GrepTool::NAME => {
-                let params = serde_json::from_value(args)
-                    .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
-                GrepTool::run(&self.sandbox, params).await
-            }
-            GlobTool::NAME => {
-                let params = serde_json::from_value(args)
-                    .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
-                GlobTool::run(&self.sandbox, params).await
-            }
-            FetchTool::NAME => {
-                let params = serde_json::from_value(args)
-                    .map_err(|e| McpError::invalid_params(e.to_string(), None))?;
-                FetchTool::run(&self.sandbox, params).await
-            }
-            name => {
-                return Err(McpError::invalid_params(
-                    format!("unknown tool: {name}"),
-                    None,
-                ));
-            }
-        };
-
-        match result {
-            Ok(text) => Ok(CallToolResult::success(vec![Content::text(text)])),
-            Err(e) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
+        match spadebox_core::call_tool(&self.sandbox, &request.name, args).await {
+            Err(protocol_err) => Err(McpError::invalid_params(protocol_err, None)),
+            Ok(Ok(text)) => Ok(CallToolResult::success(vec![Content::text(text)])),
+            Ok(Err(e)) => Ok(CallToolResult::error(vec![Content::text(e.to_string())])),
         }
     }
 }

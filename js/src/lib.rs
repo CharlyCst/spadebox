@@ -4,12 +4,10 @@
 // the JavaScript calling convention (NAPI-RS converts snake_case identifiers to
 // camelCase in the generated bindings).
 
-use std::collections::BTreeMap;
-
 use napi::bindgen_prelude::This;
 use napi_derive::napi;
 use spadebox_core::{
-  DomainRule, HttpVerb, Sandbox,
+  DomainRule, HttpVerb, Sandbox, enabled_tools,
   tools::{
     EditFileTool, EditParams, FetchParams, FetchTool, GlobParams, GlobTool, GrepParams, GrepTool,
     ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
@@ -44,41 +42,9 @@ pub struct SbToolResult {
   pub output: String,
 }
 
-/// Internal registry entry — static metadata for one tool.
-struct ToolEntry {
-  name: &'static str,
-  description: &'static str,
-  /// Pre-serialized JSON Schema string.
-  schema: String,
-}
-
-fn make_tool_entry<T: Tool>() -> ToolEntry {
-  ToolEntry {
-    name: T::NAME,
-    description: T::DESCRIPTION,
-    schema: serde_json::to_string(&T::schema()).expect("schema serialization is infallible"),
-  }
-}
-
-fn build_tools() -> BTreeMap<&'static str, ToolEntry> {
-  let mut map = BTreeMap::new();
-  for entry in [
-    make_tool_entry::<GlobTool>(),
-    make_tool_entry::<GrepTool>(),
-    make_tool_entry::<ReadFileTool>(),
-    make_tool_entry::<WriteFileTool>(),
-    make_tool_entry::<EditFileTool>(),
-    make_tool_entry::<FetchTool>(),
-  ] {
-    map.insert(entry.name, entry);
-  }
-  map
-}
-
 #[napi]
 pub struct SpadeBox {
   inner: Sandbox,
-  tools: BTreeMap<&'static str, ToolEntry>,
 }
 
 #[napi]
@@ -91,7 +57,6 @@ impl SpadeBox {
   pub fn new() -> Self {
     Self {
       inner: Sandbox::new(),
-      tools: build_tools(),
     }
   }
 
@@ -109,16 +74,16 @@ impl SpadeBox {
     Ok(this)
   }
 
-  /// Returns metadata for all available tools, ordered by name.
+  /// Returns metadata for all currently enabled tools.
   #[napi]
   pub fn tools(&self) -> Vec<SbTool> {
-    self
-      .tools
-      .values()
-      .map(|entry| SbTool {
-        name: entry.name.to_string(),
-        description: entry.description.to_string(),
-        input_schema: entry.schema.clone(),
+    enabled_tools(&self.inner)
+      .into_iter()
+      .map(|def| SbTool {
+        name: def.name.to_string(),
+        description: def.description.to_string(),
+        input_schema: serde_json::to_string(&def.schema)
+          .expect("schema serialization is infallible"),
       })
       .collect()
   }

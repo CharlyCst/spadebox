@@ -52,6 +52,18 @@ pub trait Tool {
             .expect("schema serialization is infallible")
     }
 
+    /// Returns erased metadata for this tool.
+    fn def() -> ToolDef
+    where
+        Self: Sized,
+    {
+        ToolDef {
+            name: Self::NAME,
+            description: Self::DESCRIPTION,
+            schema: Self::schema(),
+        }
+    }
+
     /// Deserialize params from a JSON string and run the tool.
     ///
     /// Returns `Err(String)` if `params_json` cannot be deserialized — this is a
@@ -72,6 +84,29 @@ pub trait Tool {
     }
 }
 
+/// Erased metadata for a single tool, independent of its `Params` type.
+pub struct ToolDef {
+    pub name: &'static str,
+    pub description: &'static str,
+    pub schema: serde_json::Value,
+}
+
+/// Returns metadata for every tool that is currently enabled in `sandbox`.
+pub fn enabled_tools(sandbox: &Sandbox) -> Vec<ToolDef> {
+    let mut tools = Vec::new();
+    if sandbox.files.is_enabled() {
+        tools.push(ReadFileTool::def());
+        tools.push(WriteFileTool::def());
+        tools.push(EditFileTool::def());
+        tools.push(GlobTool::def());
+        tools.push(GrepTool::def());
+    }
+    if sandbox.http.is_enabled() {
+        tools.push(FetchTool::def());
+    }
+    tools
+}
+
 /// Dispatch a tool call by name, deserializing params from a JSON string.
 ///
 /// - `Err(String)` — protocol error (unknown tool name or malformed params JSON).
@@ -83,12 +118,24 @@ pub async fn call_tool(
     params_json: String,
 ) -> std::result::Result<ToolResult<String>, String> {
     match name {
-        ReadFileTool::NAME => ReadFileTool::call_json(sandbox, params_json).await,
-        WriteFileTool::NAME => WriteFileTool::call_json(sandbox, params_json).await,
-        EditFileTool::NAME => EditFileTool::call_json(sandbox, params_json).await,
-        GlobTool::NAME => GlobTool::call_json(sandbox, params_json).await,
-        GrepTool::NAME => GrepTool::call_json(sandbox, params_json).await,
-        FetchTool::NAME => FetchTool::call_json(sandbox, params_json).await,
+        ReadFileTool::NAME if sandbox.files.is_enabled() => {
+            ReadFileTool::call_json(sandbox, params_json).await
+        }
+        WriteFileTool::NAME if sandbox.files.is_enabled() => {
+            WriteFileTool::call_json(sandbox, params_json).await
+        }
+        EditFileTool::NAME if sandbox.files.is_enabled() => {
+            EditFileTool::call_json(sandbox, params_json).await
+        }
+        GlobTool::NAME if sandbox.files.is_enabled() => {
+            GlobTool::call_json(sandbox, params_json).await
+        }
+        GrepTool::NAME if sandbox.files.is_enabled() => {
+            GrepTool::call_json(sandbox, params_json).await
+        }
+        FetchTool::NAME if sandbox.http.is_enabled() => {
+            FetchTool::call_json(sandbox, params_json).await
+        }
         name => Err(format!("unknown tool: {name}")),
     }
 }

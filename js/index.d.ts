@@ -15,7 +15,7 @@ export declare class SpadeBox {
    * `this` for chaining. Throws if `path` cannot be opened.
    */
   enableFiles(path: string): this
-  /** Returns metadata for all available tools, ordered by name. */
+  /** Returns metadata for all currently enabled tools. */
   tools(): Array<SbTool>
   /**
    * Call a tool by name, passing its parameters as a JSON string (`paramsJson`).

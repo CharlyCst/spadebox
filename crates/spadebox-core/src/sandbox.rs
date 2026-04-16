@@ -138,6 +138,11 @@ pub struct HttpConfig {
 }
 
 impl HttpConfig {
+    /// Returns `true` if HTTP fetching has been enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.enabled
+    }
+
     /// Enables HTTP fetching and returns `&mut self` for chaining.
     pub fn enable(&mut self) -> &mut Self {
         self.enabled = true;
@@ -204,6 +209,11 @@ impl FilesConfig {
         self.root = Some(root);
         self.read_registry = Arc::new(Mutex::new(HashMap::new()));
         Ok(self)
+    }
+
+    /// Returns `true` if a sandbox root has been set.
+    pub fn is_enabled(&self) -> bool {
+        self.root.is_some()
     }
 
     /// Returns a clone of the root `Dir`, or `Err(PermissionDenied)` if
