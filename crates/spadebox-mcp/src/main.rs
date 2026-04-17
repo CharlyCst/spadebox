@@ -69,19 +69,127 @@ impl ServerHandler for SpadeboxMcpServer {
     }
 }
 
+/// Spadebox MCP server.
+///
+/// All tools are disabled by default. Use `--files` to enable filesystem tools
+/// and `--allow` to enable HTTP fetching for specific domains.
+#[derive(clap::Parser)]
+#[command(version, about)]
+struct Cli {
+    /// Enable filesystem tools with PATH as the sandbox root.
+    #[arg(long)]
+    files: Option<String>,
+
+    /// Enable HTTP and add a domain rule. Format: `<pattern>:<verbs>` where
+    /// verbs is a comma-separated list (e.g. `api.example.com:GET,POST` or
+    /// `*:GET`). May be repeated.
+    #[arg(long)]
+    allow: Vec<String>,
+}
+
+fn parse_allow(rule: &str) -> anyhow::Result<(String, Vec<String>)> {
+    let (pattern, verbs_str) = rule
+        .split_once(':')
+        .ok_or_else(|| anyhow::anyhow!("--allow {rule:?}: expected format <pattern>:<verbs>"))?;
+    let verbs = verbs_str
+        .split(',')
+        .map(|v| v.trim().to_uppercase())
+        .filter(|v| !v.is_empty())
+        .collect::<Vec<_>>();
+    if verbs.is_empty() {
+        anyhow::bail!("--allow {rule:?}: no verbs specified");
+    }
+    Ok((pattern.to_string(), verbs))
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let sandbox_root = std::env::args().nth(1).unwrap_or_else(|| ".".to_string());
+    use clap::{CommandFactory, Parser};
+
+    let cli = Cli::parse();
+
+    if cli.files.is_none() && cli.allow.is_empty() {
+        Cli::command()
+            .error(
+                clap::error::ErrorKind::MissingRequiredArgument,
+                "at least one of --files or --allow must be specified",
+            )
+            .exit();
+    }
 
     let mut sandbox = Sandbox::new();
-    sandbox
-        .files
-        .enable(&sandbox_root)
-        .map_err(|e| anyhow::anyhow!("Failed to open sandbox at {sandbox_root:?}: {e}"))?;
+
+    if let Some(path) = &cli.files {
+        sandbox
+            .files
+            .enable(path)
+            .map_err(|e| anyhow::anyhow!("--files {path:?}: {e}"))?;
+    }
+
+    if !cli.allow.is_empty() {
+        sandbox.http.enable();
+        for rule in &cli.allow {
+            let (pattern, verbs) = parse_allow(rule)?;
+            let domain_rule = spadebox_core::DomainRule::new(
+                pattern,
+                verbs
+                    .iter()
+                    .map(|v| {
+                        spadebox_core::HttpVerb::parse(v)
+                            .ok_or_else(|| anyhow::anyhow!("--allow {rule:?}: unknown verb {v:?}"))
+                    })
+                    .collect::<anyhow::Result<Vec<_>>>()?,
+            )
+            .map_err(|e| anyhow::anyhow!("--allow {rule:?}: {e}"))?;
+            sandbox.http.allow(domain_rule);
+        }
+    }
 
     let service = SpadeboxMcpServer::new(sandbox)
         .serve(rmcp::transport::stdio())
         .await?;
     service.waiting().await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parse_allow_cases() {
+        // exact hostname, single verb
+        let (pattern, verbs) = parse_allow("api.example.com:GET").unwrap();
+        assert_eq!(pattern, "api.example.com");
+        assert_eq!(verbs, ["GET"]);
+
+        // exact hostname, multiple verbs
+        let (pattern, verbs) = parse_allow("api.example.com:GET,POST").unwrap();
+        assert_eq!(pattern, "api.example.com");
+        assert_eq!(verbs, ["GET", "POST"]);
+
+        // catch-all wildcard
+        let (pattern, verbs) = parse_allow("*:GET").unwrap();
+        assert_eq!(pattern, "*");
+        assert_eq!(verbs, ["GET"]);
+
+        // subdomain wildcard
+        let (pattern, verbs) = parse_allow("*.example.com:GET,DELETE").unwrap();
+        assert_eq!(pattern, "*.example.com");
+        assert_eq!(verbs, ["GET", "DELETE"]);
+
+        // verbs are uppercased
+        let (_, verbs) = parse_allow("example.com:get,post").unwrap();
+        assert_eq!(verbs, ["GET", "POST"]);
+
+        // whitespace around verbs is trimmed
+        let (_, verbs) = parse_allow("example.com:GET, POST , DELETE").unwrap();
+        assert_eq!(verbs, ["GET", "POST", "DELETE"]);
+
+        // missing colon
+        assert!(parse_allow("example.com").is_err());
+
+        // empty verbs
+        assert!(parse_allow("example.com:").is_err());
+    }
 }
