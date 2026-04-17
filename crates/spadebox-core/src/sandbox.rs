@@ -249,6 +249,12 @@ impl Sandbox {
     /// disabled. Call `sandbox.files.enable(path)` and/or
     /// `sandbox.http.enable()` to activate them.
     pub fn new() -> Self {
+        static INIT_TLS: std::sync::Once = std::sync::Once::new();
+        INIT_TLS.call_once(|| {
+            rustls::crypto::ring::default_provider()
+                .install_default()
+                .expect("failed to install ring crypto provider");
+        });
         Sandbox {
             files: FilesConfig::default(),
             http: HttpConfig::default(),
