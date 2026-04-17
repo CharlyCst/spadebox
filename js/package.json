@@ -15,7 +15,9 @@
     "tools",
     "agent"
   ],
+  "readme": "README.md",
   "files": [
+    "README.md",
     "index.d.ts",
     "index.js"
   ],

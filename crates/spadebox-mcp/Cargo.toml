@@ -5,7 +5,7 @@ edition = "2024"
 description = "Spadebox tools exposed through MCP"
 license = "MIT"
 repository = "https://github.com/CharlyCst/spadebox"
-readme = "../../README.md"
+readme = "README.md"
 
 [[bin]]
 name = "spadebox-mcp"
