@@ -1582,7 +1582,7 @@ dependencies = [
 
 [[package]]
 name = "spadebox-core"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "cap-std",
  "globset",
@@ -1612,7 +1612,7 @@ dependencies = [
 
 [[package]]
 name = "spadebox-mcp"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "anyhow",
  "clap",

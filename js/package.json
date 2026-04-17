@@ -1,6 +1,6 @@
 {
   "name": "@spadebox/spadebox",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "A toolbox for AI agents",
   "type": "commonjs",
   "main": "index.js",
@@ -29,9 +29,9 @@
     "access": "public"
   },
   "optionalDependencies": {
-    "@spadebox/spadebox-linux-x64-gnu": "0.1.1",
-    "@spadebox/spadebox-linux-arm64-gnu": "0.1.1",
-    "@spadebox/spadebox-darwin-arm64": "0.1.1"
+    "@spadebox/spadebox-linux-x64-gnu": "0.2.0",
+    "@spadebox/spadebox-linux-arm64-gnu": "0.2.0",
+    "@spadebox/spadebox-darwin-arm64": "0.2.0"
   },
   "napi": {
     "binaryName": "spadebox",
