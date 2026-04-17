@@ -33,8 +33,9 @@ them automatically — never duplicate this information elsewhere.
   it by hand. Doc comments from `js/src/lib.rs` flow into it automatically.
 - **JSON Schema** (`inputSchema` in `SbTool`) — generated at runtime via the
   `#[derive(JsonSchema)]` on each `Params` struct.
-- **MCP tool list** — the MCP server calls `T::NAME`, `T::DESCRIPTION`, and
-  `T::schema()` directly; no manual sync needed.
+- **MCP tool list** — the MCP server calls `enabled_tools(sandbox)` from
+  `spadebox-core` and converts each `ToolDef` to an MCP tool definition; no
+  manual sync needed.
 
 ### Manually maintained
 
@@ -88,19 +89,20 @@ them automatically — never duplicate this information elsewhere.
 
 2. **`crates/spadebox-core/src/tools/mod.rs`**
    - `pub mod <name>;` and re-export the new `*Tool` and `*Params` types.
-   - Add a `NewTool::NAME => NewTool::call_json(sandbox, params_json).await`
+   - Add a `NewTool::def()` call inside `enabled_tools()`, guarded by the
+     appropriate `sandbox.<subsystem>.is_enabled()` check.
+   - Add a `NewTool::NAME if sandbox.<subsystem>.is_enabled() => NewTool::call_json(sandbox, params_json).await`
      arm to the `call_tool` match.
 
-3. **`crates/spadebox-mcp/src/main.rs`**
-   - Import the new `*Tool` type.
-   - Add `mcp_tool::<NewTool>()` to the `list_tools` vec.
-   - Add a dispatch arm in `call_tool` (if the MCP server has its own match,
-     otherwise it delegates to `spadebox_core::call_tool` and needs no change).
+3. **`crates/spadebox-mcp/src/main.rs`** — **no changes needed**. The MCP
+   server calls `enabled_tools(sandbox)` which automatically picks up any tool
+   registered in `enabled_tools()` in `tools/mod.rs`, and delegates all
+   dispatch to `spadebox_core::call_tool`.
 
 4. **`js/src/lib.rs`**
-   - Add `make_tool_entry::<NewTool>()` to the `build_tools` array.
    - Add a convenience method (`#[napi] pub async fn <name>(...)`) with a
-     clear doc comment using camelCase.
+     clear doc comment using camelCase. The `tools()` method calls
+     `enabled_tools(&self.inner)` automatically — no extra registration needed.
 
 5. **`README.md`** — add the new tool name to the tool list.
 
@@ -117,8 +119,8 @@ The goal is to mirror the pattern established by `js/`:
 4. Do **not** copy `NAME`, `DESCRIPTION`, or parameter descriptions from the
    core — let the binding derive or call them at runtime/generation time, just
    as the MCP server and JS bindings do.
-5. Add a `make_tool_entry`-equivalent registration so `tools()` returns all
-   five tools.
+5. Register the tool in `enabled_tools()` in `crates/spadebox-core/src/tools/mod.rs`
+   so `tools()` (which calls `enabled_tools`) returns all tools automatically.
 6. Update `README.md` to mention the new binding.
 
 ---
