@@ -182,6 +182,19 @@ impl SpadeBox {
     .map_err(to_napi_err)
   }
 
+  /// Set the `User-Agent` header sent with every HTTP request.
+  ///
+  /// Defaults to `"spadebox/0.0.0 (AI-agent)"`. Returns `this` for chaining.
+  ///
+  /// ```js
+  /// sb.setUserAgent('myagent/1.0').enableHttp().allow('api.example.com', ['GET']);
+  /// ```
+  #[napi]
+  pub fn set_user_agent<'env>(&mut self, user_agent: String, this: This<'env>) -> This<'env> {
+    self.inner.http.set_user_agent(user_agent);
+    this
+  }
+
   /// Enable HTTP fetching. Returns `this` for chaining with `allow`.
   ///
   /// ```js

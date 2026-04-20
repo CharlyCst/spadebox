@@ -63,6 +63,16 @@ export declare class SpadeBox {
    */
   grep(pattern: string, glob?: string | undefined | null, contextLines?: number | undefined | null): Promise<string>
   /**
+   * Set the `User-Agent` header sent with every HTTP request.
+   *
+   * Defaults to `"spadebox/0.0.0 (AI-agent)"`. Returns `this` for chaining.
+   *
+   * ```js
+   * sb.setUserAgent('myagent/1.0').enableHttp().allow('api.example.com', ['GET']);
+   * ```
+   */
+  setUserAgent(userAgent: string): this
+  /**
    * Enable HTTP fetching. Returns `this` for chaining with `allow`.
    *
    * ```js

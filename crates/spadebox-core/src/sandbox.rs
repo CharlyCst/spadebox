@@ -138,11 +138,22 @@ impl DomainRule {
 ///     .allow(DomainRule::new("api.example.com", vec![HttpVerb::Get, HttpVerb::Post]).unwrap())
 ///     .allow(DomainRule::new("*.cdn.example.com", vec![HttpVerb::Get]).unwrap());
 /// ```
-#[derive(Default)]
 pub struct HttpConfig {
     pub enabled: bool,
     /// Domain rules evaluated in order; first match wins.
     pub domain_rules: Vec<DomainRule>,
+    /// Value sent as the `User-Agent` header on every request.
+    pub user_agent: String,
+}
+
+impl Default for HttpConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            domain_rules: Vec::new(),
+            user_agent: "spadebox/0.0.0 (AI-agent)".to_string(),
+        }
+    }
 }
 
 impl HttpConfig {
@@ -154,6 +165,12 @@ impl HttpConfig {
     /// Enables HTTP fetching and returns `&mut self` for chaining.
     pub fn enable(&mut self) -> &mut Self {
         self.enabled = true;
+        self
+    }
+
+    /// Sets the `User-Agent` header sent with every request.
+    pub fn set_user_agent(&mut self, user_agent: impl Into<String>) -> &mut Self {
+        self.user_agent = user_agent.into();
         self
     }
 

@@ -86,7 +86,10 @@ impl Tool for FetchTool {
         }
 
         // Build and send the request.
-        let client = Client::new();
+        let client = Client::builder()
+            .user_agent(&sandbox.http.user_agent)
+            .build()
+            .map_err(|e| ToolError::HttpError(e.to_string()))?;
         let method = reqwest::Method::from_bytes(method_upper.as_bytes())
             .map_err(|e| ToolError::InvalidUrl(format!("invalid method: {}", e)))?;
 
