@@ -9,6 +9,11 @@ Items we should address:
 - [X] Add a default user agent for fetch tool, and make it configurable.
 - [ ] Make description dynamic, so it can be based on the configured options. E.g, allowed verbs, or http/https. Same for schema description.
 - [ ] Make a strict separation between ToolResult (for agents), and other results (e.g. when creating the Sandbox or configuring HTTP allowlist).
+- [ ] Add support for base path to grep and glob (default to "/").
+- [ ] Fetch: add optionnal summarization step for HTML? (or maybe make it default with an optionnal raw for HTML content type).
+- [ ] Grep: add support for case insentivity
+- [ ] Add a "move" tool to move files and folders, with the ability to delete if there is no target (or a delete option, probably safer)
+      Note: we might need to think about how this interracts with the read timestamp?
 
 ## References:
 
@@ -18,3 +23,7 @@ Check the following implementation:
 - Pi Agent
 - Goose
 - Claude Code (see https://ccunpacked.dev/)
+
+## Other notes
+
+Pi seems to have a `ls` tool, do we also want something like that? Maybe glob is enough.
