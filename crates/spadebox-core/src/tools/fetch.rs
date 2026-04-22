@@ -150,7 +150,10 @@ fn process_body(mime: Option<&str>, body: &str) -> ToolResult<String> {
 }
 
 fn html_to_markdown(html: &str) -> ToolResult<String> {
-    htmd::convert(html)
+    htmd::HtmlToMarkdown::builder()
+        .skip_tags(vec!["script", "style"])
+        .build()
+        .convert(html)
         .map_err(|e| ToolError::HttpError(format!("HTML to Markdown conversion failed: {e}")))
 }
 
