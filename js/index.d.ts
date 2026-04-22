@@ -97,8 +97,10 @@ export declare class SpadeBox {
    * HTTP must be enabled first via `enableHttp`. The `url` must use the `http`
    * or `https` scheme. `method` is case-insensitive (e.g. `"GET"`, `"POST"`).
    * Pass `body` for methods that send a request body (POST, PUT, PATCH).
+   * When `raw` is `false` (default), HTML responses are converted to Markdown.
+   * Set `raw` to `true` to receive the raw response body unchanged.
    */
-  fetch(url: string, method: string, body?: string | undefined | null): Promise<string>
+  fetch(url: string, method: string, body?: string | undefined | null, raw?: boolean | undefined | null): Promise<string>
   /**
    * Replace text within a file. Calls the `edit_file` tool directly.
    *

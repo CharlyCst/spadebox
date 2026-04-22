@@ -16,7 +16,7 @@ use serde::Deserialize;
 
 use crate::{Sandbox, ToolError, ToolResult, sandbox::HttpVerb};
 
-use super::Tool;
+use super::{Tool, deserialize_bool_flexible};
 
 // ---------------------------------------------------------------------------
 // Parameters
@@ -26,10 +26,14 @@ use super::Tool;
 pub struct FetchParams {
     /// The URL to fetch (must use `http` or `https` scheme).
     pub url: String,
-    /// HTTP method to use (e.g. `"GET"`, `"POST"`). Case-insensitive.
+    /// HTTP method to use (e.g. `"GET"`, `"POST"`).
     pub method: String,
     /// Optional request body (for POST, PUT, PATCH).
     pub body: Option<String>,
+    /// When `true` return the raw response body, otherwise process the content for efficient LLM
+    /// consumption (e.g. convert HTML to markdown). Default to `false`
+    #[serde(default, deserialize_with = "deserialize_bool_flexible")]
+    pub raw: bool,
 }
 
 // ---------------------------------------------------------------------------
@@ -104,17 +108,50 @@ impl Tool for FetchTool {
             .map_err(|e| ToolError::HttpError(e.to_string()))?;
 
         let status = response.status();
+        let content_type = parse_content_type(&response);
         let body = response
             .text()
             .await
             .map_err(|e| ToolError::HttpError(e.to_string()))?;
 
         if body.is_empty() {
-            Ok(format!("HTTP {}", status.as_u16()))
-        } else {
+            return Ok(format!("HTTP {}", status.as_u16()));
+        }
+
+        if params.raw {
             Ok(body)
+        } else {
+            process_body(content_type.as_deref(), &body)
         }
     }
+}
+
+// ---------------------------------------------------------------------------
+// Content processing
+// ---------------------------------------------------------------------------
+
+/// Return the content-type value from a response header, stripped of parameters
+/// (e.g. `"text/html; charset=utf-8"` → `"text/html"`).
+fn parse_content_type(response: &reqwest::Response) -> Option<String> {
+    response
+        .headers()
+        .get(reqwest::header::CONTENT_TYPE)
+        .and_then(|v| v.to_str().ok())
+        .map(|ct| ct.split(';').next().unwrap_or(ct).trim().to_lowercase())
+}
+
+/// Process a response body for LLM consumption based on its MIME type.
+/// Unknown types are returned as-is.
+fn process_body(mime: Option<&str>, body: &str) -> ToolResult<String> {
+    match mime {
+        Some("text/html") => html_to_markdown(body),
+        _ => Ok(body.to_owned()),
+    }
+}
+
+fn html_to_markdown(html: &str) -> ToolResult<String> {
+    htmd::convert(html)
+        .map_err(|e| ToolError::HttpError(format!("HTML to Markdown conversion failed: {e}")))
 }
 
 // ---------------------------------------------------------------------------
@@ -142,6 +179,7 @@ mod tests {
                 url: "https://example.com".into(),
                 method: "GET".into(),
                 body: None,
+                raw: false,
             },
         )
         .await;
@@ -161,6 +199,7 @@ mod tests {
                 url: "file:///etc/passwd".into(),
                 method: "GET".into(),
                 body: None,
+                raw: false,
             },
         )
         .await;
@@ -180,6 +219,7 @@ mod tests {
                 url: "https://evil.com".into(),
                 method: "GET".into(),
                 body: None,
+                raw: false,
             },
         )
         .await;
@@ -199,6 +239,7 @@ mod tests {
                 url: "https://example.com".into(),
                 method: "POST".into(),
                 body: None,
+                raw: false,
             },
         )
         .await;

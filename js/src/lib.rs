@@ -238,14 +238,17 @@ impl SpadeBox {
   /// HTTP must be enabled first via `enableHttp`. The `url` must use the `http`
   /// or `https` scheme. `method` is case-insensitive (e.g. `"GET"`, `"POST"`).
   /// Pass `body` for methods that send a request body (POST, PUT, PATCH).
+  /// When `raw` is `false` (default), HTML responses are converted to Markdown.
+  /// Set `raw` to `true` to receive the raw response body unchanged.
   #[napi]
   pub async fn fetch(
     &self,
     url: String,
     method: String,
     body: Option<String>,
+    raw: Option<bool>,
   ) -> napi::Result<String> {
-    FetchTool::run(&self.inner, FetchParams { url, method, body })
+    FetchTool::run(&self.inner, FetchParams { url, method, body, raw: raw.unwrap_or(false) })
       .await
       .map_err(to_napi_err)
   }
