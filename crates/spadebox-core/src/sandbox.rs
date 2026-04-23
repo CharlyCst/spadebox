@@ -253,18 +253,103 @@ impl FilesConfig {
 }
 
 // ---------------------------------------------------------------------------
+// JavaScript configuration
+// ---------------------------------------------------------------------------
+
+/// A request sent to the dedicated JS context thread: source code to evaluate
+/// and a one-shot reply channel to return the result on.
+type JsRequest = (String, tokio::sync::oneshot::Sender<ToolResult<String>>);
+
+/// Live handle to the dedicated JS REPL thread.
+///
+/// # Why a dedicated thread?
+///
+/// Boa's `JsContext` is `!Send`: it cannot be moved across threads. We spawn a
+/// dedicated OS thread that owns the `JsContext` for its entire lifetime and
+/// processes evaluation requests through a channel. This keeps `JsConfig` —
+/// and therefore `Sandbox` — `Send + Sync`, while naturally preserving JS session
+/// state (variables, loaded modules, …) across tool calls.
+///
+/// [`tokio::sync::mpsc::UnboundedSender`] is used instead of
+/// `std::sync::mpsc::Sender` because only the former is `Send + Sync`, which is
+/// required for `Sandbox` to be `Sync`.
+struct JsReplHandle {
+    tx: tokio::sync::mpsc::UnboundedSender<JsRequest>,
+    /// Kept alive so the thread is joined on drop rather than detached.
+    _thread: std::thread::JoinHandle<()>,
+}
+
+/// Configuration and handle for the JavaScript REPL.
+#[derive(Default)]
+pub struct JsConfig {
+    /// `None` until [`enable`](JsConfig::enable) is called.
+    handle: Option<JsReplHandle>,
+}
+
+impl JsConfig {
+    /// Returns `true` if the JS REPL has been enabled.
+    pub fn is_enabled(&self) -> bool {
+        self.handle.is_some()
+    }
+
+    /// Spawns the dedicated JS context thread and enables the REPL.
+    ///
+    /// Calling `enable` more than once is a no-op; the existing context is reused.
+    pub fn enable(&mut self) -> &mut Self {
+        if self.handle.is_some() {
+            return self;
+        }
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsRequest>();
+        let thread = std::thread::spawn(move || {
+            let mut ctx = crate::js_runtime::JsContext::new();
+            // `blocking_recv` parks this thread until a request arrives, then
+            // evaluates it synchronously. Loop exits when all senders are dropped
+            // (i.e., when `JsConfig` is dropped), cleanly destroying the context.
+            while let Some((code, reply)) = rx.blocking_recv() {
+                // Ignore send errors: the caller may have been cancelled.
+                let _ = reply.send(ctx.eval(&code));
+            }
+        });
+        self.handle = Some(JsReplHandle {
+            tx,
+            _thread: thread,
+        });
+        self
+    }
+
+    /// Sends `code` to the JS context thread and awaits the result.
+    pub(crate) async fn repl_eval(&self, code: String) -> ToolResult<String> {
+        let tx = self
+            .handle
+            .as_ref()
+            .map(|h| &h.tx)
+            .ok_or_else(|| ToolError::PermissionDenied("JS REPL is disabled".into()))?;
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+        tx.send((code, reply_tx))
+            .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?;
+        reply_rx
+            .await
+            .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Sandbox
 // ---------------------------------------------------------------------------
 
 pub struct Sandbox {
     pub files: FilesConfig,
     pub http: HttpConfig,
+    pub js: JsConfig,
 }
 
 impl Sandbox {
-    /// Creates a new `Sandbox` with filesystem tools and HTTP fetching both
-    /// disabled. Call `sandbox.files.enable(path)` and/or
-    /// `sandbox.http.enable()` to activate them.
+    /// Creates a new `Sandbox` with all tools disabled.
+    ///
+    /// Activate individual tool groups with:
+    /// - `sandbox.files.enable(path)` — filesystem tools
+    /// - `sandbox.http.enable()` — HTTP fetch tool
+    /// - `sandbox.js.enable()` — JavaScript REPL
     pub fn new() -> Self {
         static INIT_TLS: std::sync::Once = std::sync::Once::new();
         INIT_TLS.call_once(|| {
@@ -275,6 +360,7 @@ impl Sandbox {
         Sandbox {
             files: FilesConfig::default(),
             http: HttpConfig::default(),
+            js: JsConfig::default(),
         }
     }
 }

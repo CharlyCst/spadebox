@@ -7,6 +7,7 @@ mod edit;
 mod fetch;
 mod glob;
 mod grep;
+mod js_repl;
 mod read;
 mod write;
 
@@ -14,6 +15,7 @@ pub use edit::{EditFileTool, EditParams};
 pub use fetch::{FetchParams, FetchTool};
 pub use glob::{GlobParams, GlobTool};
 pub use grep::{GrepParams, GrepTool};
+pub use js_repl::{JsReplParams, JsReplTool};
 pub use read::{ReadFileTool, ReadParams};
 pub use write::{WriteFileTool, WriteParams};
 
@@ -104,6 +106,9 @@ pub fn enabled_tools(sandbox: &Sandbox) -> Vec<ToolDef> {
     if sandbox.http.is_enabled() {
         tools.push(FetchTool::def());
     }
+    if sandbox.js.is_enabled() {
+        tools.push(JsReplTool::def());
+    }
     tools
 }
 
@@ -135,6 +140,9 @@ pub async fn call_tool(
         }
         FetchTool::NAME if sandbox.http.is_enabled() => {
             FetchTool::call_json(sandbox, params_json).await
+        }
+        JsReplTool::NAME if sandbox.js.is_enabled() => {
+            JsReplTool::call_json(sandbox, params_json).await
         }
         name => Err(format!("unknown tool: {name}")),
     }

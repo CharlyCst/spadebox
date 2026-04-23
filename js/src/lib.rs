@@ -248,9 +248,17 @@ impl SpadeBox {
     body: Option<String>,
     raw: Option<bool>,
   ) -> napi::Result<String> {
-    FetchTool::run(&self.inner, FetchParams { url, method, body, raw: raw.unwrap_or(false) })
-      .await
-      .map_err(to_napi_err)
+    FetchTool::run(
+      &self.inner,
+      FetchParams {
+        url,
+        method,
+        body,
+        raw: raw.unwrap_or(false),
+      },
+    )
+    .await
+    .map_err(to_napi_err)
   }
 
   /// Replace text within a file. Calls the `edit_file` tool directly.
