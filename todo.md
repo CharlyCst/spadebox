@@ -15,6 +15,7 @@ Items we should address:
 - [ ] Grep: add support for case insentivity
 - [ ] Add a "move" tool to move files and folders, with the ability to delete if there is no target (or a delete option, probably safer)
       Note: we might need to think about how this interracts with the read timestamp?
+- [ ] Add a proper Spadebox reset function (for now the best solution is to construct a new Spadebox instance when re-setting the agent context)
 
 ## References:
 

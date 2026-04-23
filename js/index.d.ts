@@ -102,6 +102,24 @@ export declare class SpadeBox {
    */
   fetch(url: string, method: string, body?: string | undefined | null, raw?: boolean | undefined | null): Promise<string>
   /**
+   * Enable the JavaScript tools. Returns `this` for chaining.
+   *
+   * Once enabled, the JS REPL session persists across calls: variables and functions
+   * defined in one `jsRepl` call are available in subsequent ones.
+   *
+   * ```js
+   * const sb = new SpadeBox().enableJs();
+   * ```
+   */
+  enableJs(): this
+  /**
+   * Evaluate JavaScript code and return the result as a string.
+   *
+   * The session is persistent: variables and functions defined in one call are
+   * available in subsequent calls. Requires `enableJs` to have been called first.
+   */
+  jsRepl(code: string): Promise<string>
+  /**
    * Replace text within a file. Calls the `edit_file` tool directly.
    *
    * Finds the exact string `oldString` in the file at `path` and replaces it

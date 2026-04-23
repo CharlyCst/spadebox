@@ -85,6 +85,10 @@ struct Cli {
     /// `*:GET`). May be repeated.
     #[arg(long)]
     allow: Vec<String>,
+
+    /// Enable the JavaScript tools.
+    #[arg(long)]
+    js: bool,
 }
 
 fn parse_allow(rule: &str) -> anyhow::Result<(String, Vec<String>)> {
@@ -108,11 +112,11 @@ async fn main() -> anyhow::Result<()> {
 
     let cli = Cli::parse();
 
-    if cli.files.is_none() && cli.allow.is_empty() {
+    if cli.files.is_none() && cli.allow.is_empty() && !cli.js {
         Cli::command()
             .error(
                 clap::error::ErrorKind::MissingRequiredArgument,
-                "at least one of --files or --allow must be specified",
+                "at least one of --files, --allow, or --js must be specified",
             )
             .exit();
     }
@@ -124,6 +128,10 @@ async fn main() -> anyhow::Result<()> {
             .files
             .enable(path)
             .map_err(|e| anyhow::anyhow!("--files {path:?}: {e}"))?;
+    }
+
+    if cli.js {
+        sandbox.js.enable();
     }
 
     if !cli.allow.is_empty() {

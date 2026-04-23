@@ -9,7 +9,7 @@ use spadebox_core::{
   DomainRule, HttpVerb, Sandbox, enabled_tools,
   tools::{
     EditFileTool, EditParams, FetchParams, FetchTool, GlobParams, GlobTool, GrepParams, GrepTool,
-    ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
+    JsReplParams, JsReplTool, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
   },
 };
 
@@ -259,6 +259,31 @@ impl SpadeBox {
     )
     .await
     .map_err(to_napi_err)
+  }
+
+  /// Enable the JavaScript tools. Returns `this` for chaining.
+  ///
+  /// Once enabled, the JS REPL session persists across calls: variables and functions
+  /// defined in one `jsRepl` call are available in subsequent ones.
+  ///
+  /// ```js
+  /// const sb = new SpadeBox().enableJs();
+  /// ```
+  #[napi]
+  pub fn enable_js<'env>(&mut self, this: This<'env>) -> This<'env> {
+    self.inner.js.enable();
+    this
+  }
+
+  /// Evaluate JavaScript code and return the result as a string.
+  ///
+  /// The session is persistent: variables and functions defined in one call are
+  /// available in subsequent calls. Requires `enableJs` to have been called first.
+  #[napi]
+  pub async fn js_repl(&self, code: String) -> napi::Result<String> {
+    JsReplTool::run(&self.inner, JsReplParams { code })
+      .await
+      .map_err(to_napi_err)
   }
 
   /// Replace text within a file. Calls the `edit_file` tool directly.

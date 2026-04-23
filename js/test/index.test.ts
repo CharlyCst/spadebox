@@ -99,6 +99,27 @@ Deno.test('path traversal is rejected', async () => {
   })
 })
 
+// --- jsRepl ---
+
+Deno.test('jsRepl evaluates an expression', async () => {
+  const sb = new SpadeBox().enableJs()
+  const result = await sb.jsRepl('1 + 1')
+  assertEquals(result, '2')
+})
+
+Deno.test('jsRepl session is persistent across calls', async () => {
+  const sb = new SpadeBox().enableJs()
+  await sb.jsRepl('let x = 42;')
+  const result = await sb.jsRepl('x')
+  assertEquals(result, '42')
+})
+
+Deno.test('jsRepl throws on JS errors', async () => {
+  const sb = new SpadeBox().enableJs()
+  const err = await assertRejects(() => sb.jsRepl("throw new Error('oops')"), Error)
+  assertMatch(err.message, /JS error/i)
+})
+
 // --- callTool ---
 
 Deno.test('callTool dispatches read_file and returns output', async () => {

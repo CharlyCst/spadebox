@@ -24,8 +24,10 @@ Currently, Spadebox includes the following tools:
 - `grep`
 - `glob`
 - `fetch`
+- `js_repl`
 
 Spadebox uses the [`cap-std` crate](https://github.com/bytecodealliance/cap-std) for file system sandboxing, and domain whitelisting for HTTP requests.
+The JS engine is based on  [boa](https://boajs.dev/), and use the same sandboxing policies.
 
 ## Usage
 
@@ -37,7 +39,8 @@ import { SpadeBox } from "@spadebox/spadebox";
 const sb = new SpadeBox()
   .enableFiles("/workspace")
   .enableHttp()
-  .allow("api.example.com", ["GET", "POST"]);
+  .allow("api.example.com", ["GET", "POST"])
+  .enableJs();
 
 const tools = sb.tools(); // pass to your LLM as available tools
 
@@ -55,6 +58,7 @@ sandbox.files.enable("/workspace")?;
 sandbox.http
     .enable()
     .allow(DomainRule::new("api.example.com", vec![HttpVerb::Get, HttpVerb::Post])?);
+sandbox.js.enable();
 
 let tools = enabled_tools(&sandbox); // pass to your LLM as available tools
 
@@ -71,6 +75,9 @@ spadebox-mcp --files /workspace
 # HTTP tools only (allow specific domains and verbs)
 spadebox-mcp --allow "api.example.com:GET,POST" --allow "*.cdn.example.com:GET"
 
-# both
-spadebox-mcp --files /workspace --allow "api.example.com:GET"
+# JavaScript REPL only
+spadebox-mcp --js
+
+# all tools
+spadebox-mcp --files /workspace --allow "api.example.com:GET" --js
 ```

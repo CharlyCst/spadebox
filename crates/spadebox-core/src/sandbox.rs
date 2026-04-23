@@ -279,24 +279,24 @@ struct JsReplHandle {
     _thread: std::thread::JoinHandle<()>,
 }
 
-/// Configuration and handle for the JavaScript REPL.
+/// Configuration and handle for the JavaScript tools.
 #[derive(Default)]
 pub struct JsConfig {
     /// `None` until [`enable`](JsConfig::enable) is called.
-    handle: Option<JsReplHandle>,
+    repl_handle: Option<JsReplHandle>,
 }
 
 impl JsConfig {
     /// Returns `true` if the JS REPL has been enabled.
     pub fn is_enabled(&self) -> bool {
-        self.handle.is_some()
+        self.repl_handle.is_some()
     }
 
     /// Spawns the dedicated JS context thread and enables the REPL.
     ///
     /// Calling `enable` more than once is a no-op; the existing context is reused.
     pub fn enable(&mut self) -> &mut Self {
-        if self.handle.is_some() {
+        if self.repl_handle.is_some() {
             return self;
         }
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsRequest>();
@@ -310,7 +310,7 @@ impl JsConfig {
                 let _ = reply.send(ctx.eval(&code));
             }
         });
-        self.handle = Some(JsReplHandle {
+        self.repl_handle = Some(JsReplHandle {
             tx,
             _thread: thread,
         });
@@ -320,7 +320,7 @@ impl JsConfig {
     /// Sends `code` to the JS context thread and awaits the result.
     pub(crate) async fn repl_eval(&self, code: String) -> ToolResult<String> {
         let tx = self
-            .handle
+            .repl_handle
             .as_ref()
             .map(|h| &h.tx)
             .ok_or_else(|| ToolError::PermissionDenied("JS REPL is disabled".into()))?;
@@ -349,7 +349,7 @@ impl Sandbox {
     /// Activate individual tool groups with:
     /// - `sandbox.files.enable(path)` — filesystem tools
     /// - `sandbox.http.enable()` — HTTP fetch tool
-    /// - `sandbox.js.enable()` — JavaScript REPL
+    /// - `sandbox.js.enable()` — JavaScript tools
     pub fn new() -> Self {
         static INIT_TLS: std::sync::Once = std::sync::Once::new();
         INIT_TLS.call_once(|| {
