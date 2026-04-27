@@ -26,12 +26,15 @@ export declare class SpadeBox {
    */
   callTool(name: string, paramsJson: string): Promise<SbToolResult>
   /**
-   * Read the full text content of a file. Calls the `read_file` tool directly.
+   * Read the text content of a file. Calls the `read_file` tool directly.
    *
    * `path` must be relative to the sandbox root (e.g. `'src/main.rs'`).
+   * `offset` is a 1-indexed line number to start reading from (default: 1).
+   * `limit` caps the number of lines returned.
+   * `maxBytes` caps the number of bytes returned (default: 20 000). Pass `0` to disable.
    * Returns the file's content as a UTF-8 string.
    */
-  readFile(path: string): Promise<string>
+  readFile(path: string, offset?: number | undefined | null, limit?: number | undefined | null, maxBytes?: number | undefined | null): Promise<string>
   /**
    * Write text content to a file. Calls the `write_file` tool directly.
    *

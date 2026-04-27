@@ -131,9 +131,17 @@ mod tests {
     }
 
     async fn read(sandbox: &Sandbox, path: &str) {
-        ReadFileTool::run(sandbox, ReadParams { path: path.into() })
-            .await
-            .unwrap();
+        ReadFileTool::run(
+            sandbox,
+            ReadParams {
+                path: path.into(),
+                limit: None,
+                offset: None,
+                max_bytes: None,
+            },
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]

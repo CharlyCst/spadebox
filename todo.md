@@ -2,7 +2,7 @@
 
 ## Read
 
-- [ ] Add support for limit to read tool (both bytes and max lines), and optional offset parameter for large files (by lines or bytes?).
+- [X] Add support for limit to read tool (both bytes and max lines), and optional offset parameter for large files (by lines or bytes?).
       We should also add support for limit to other read tools, such as fetch.
 - [ ] Add support for an optional `read_range` parameter.
       Range are expressed in lines, files are 1-indexed, and -1 means read entire document.
@@ -39,6 +39,7 @@
       Note: we might need to think about how this interacts with the read timestamp.
 - [ ] Add a proper Spadebox reset function (for now the best solution is to construct a new Spadebox instance when re-setting the agent context).
 - [ ] Doc: explain somewhere that spadebox is designed to not require bash execution tool (but one can be provided in addition if desired).
+- [ ] Implement integration tests that use the same source of truth (e.g. input json) across all exposed bindings (Rust, JS, MCP).
 
 ---
 

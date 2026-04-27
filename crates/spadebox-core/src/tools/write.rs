@@ -233,6 +233,9 @@ mod tests {
             &sandbox,
             ReadParams {
                 path: "f.txt".into(),
+                limit: None,
+                offset: None,
+                max_bytes: None,
             },
         )
         .await
@@ -269,6 +272,9 @@ mod tests {
             &sandbox,
             ReadParams {
                 path: "f.txt".into(),
+                limit: None,
+                offset: None,
+                max_bytes: None,
             },
         )
         .await
@@ -306,6 +312,9 @@ mod tests {
             &sandbox,
             ReadParams {
                 path: "f.txt".into(),
+                limit: None,
+                offset: None,
+                max_bytes: None,
             },
         )
         .await

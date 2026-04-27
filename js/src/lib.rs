@@ -105,15 +105,32 @@ impl SpadeBox {
     }
   }
 
-  /// Read the full text content of a file. Calls the `read_file` tool directly.
+  /// Read the text content of a file. Calls the `read_file` tool directly.
   ///
   /// `path` must be relative to the sandbox root (e.g. `'src/main.rs'`).
+  /// `offset` is a 1-indexed line number to start reading from (default: 1).
+  /// `limit` caps the number of lines returned.
+  /// `maxBytes` caps the number of bytes returned (default: 20 000). Pass `0` to disable.
   /// Returns the file's content as a UTF-8 string.
   #[napi]
-  pub async fn read_file(&self, path: String) -> napi::Result<String> {
-    ReadFileTool::run(&self.inner, ReadParams { path })
-      .await
-      .map_err(to_napi_err)
+  pub async fn read_file(
+    &self,
+    path: String,
+    offset: Option<u32>,
+    limit: Option<u32>,
+    max_bytes: Option<u32>,
+  ) -> napi::Result<String> {
+    ReadFileTool::run(
+      &self.inner,
+      ReadParams {
+        path,
+        offset: offset.map(Into::into),
+        limit: limit.map(Into::into),
+        max_bytes: max_bytes.map(Into::into),
+      },
+    )
+    .await
+    .map_err(to_napi_err)
   }
 
   /// Write text content to a file. Calls the `write_file` tool directly.
