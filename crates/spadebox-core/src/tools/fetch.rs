@@ -14,10 +14,10 @@ use reqwest::Client;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::tool_utils::{DEFAULT_MAX_BYTES, truncate_bytes};
+use crate::tool_utils::{DEFAULT_MAX_BYTES, deserialize_bool_flexible, truncate_bytes};
 use crate::{Sandbox, ToolError, ToolResult, sandbox::HttpVerb};
 
-use super::{Tool, deserialize_bool_flexible};
+use super::Tool;
 
 // ---------------------------------------------------------------------------
 // Parameters

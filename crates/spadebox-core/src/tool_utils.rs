@@ -1,12 +1,10 @@
+use serde::Deserialize;
+
 use cap_std::fs::File;
 use cap_std::time::SystemTime;
 
 use crate::sandbox::Registry;
 use crate::{ToolError, ToolResult};
-
-// ---------------------------------------------------------------------------
-// Output truncation
-// ---------------------------------------------------------------------------
 
 /// Default byte cap applied to tool outputs. Large enough for virtually any
 /// source file; small enough to protect the context window.
@@ -32,6 +30,23 @@ pub(crate) fn truncate_bytes(content: String, max_bytes: u64) -> String {
     let mut truncated = content[..end].to_string();
     truncated.push_str(TRUNCATION_WARNING);
     truncated
+}
+
+/// Deserializes a boolean that may arrive as a JSON bool or as a string.
+/// MCP clients such as Claude Code may serialize booleans as strings (`"true"`).
+pub(crate) fn deserialize_bool_flexible<'de, D: serde::Deserializer<'de>>(
+    d: D,
+) -> std::result::Result<bool, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum BoolOrString {
+        Bool(bool),
+        Str(String),
+    }
+    match BoolOrString::deserialize(d)? {
+        BoolOrString::Bool(b) => Ok(b),
+        BoolOrString::Str(s) => s.parse().map_err(serde::de::Error::custom),
+    }
 }
 
 /// Checks that `path` was read before writing and has not been modified externally.

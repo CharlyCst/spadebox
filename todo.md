@@ -20,8 +20,8 @@
 
 ## Grep
 
-- [ ] Add support for base path (default to "/") (no need for glob, because path can be part of pattern).
-- [ ] Add support for case insensitivity.
+- [X] Add support for base path (default to "/"). (the glob parameter handles that)
+- [X] Add support for case insensitivity. (no need to, the `(?i)` flag is sufficient)
 
 ## Glob
 

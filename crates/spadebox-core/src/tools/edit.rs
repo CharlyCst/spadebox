@@ -7,9 +7,9 @@ use serde::Deserialize;
 use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
 use crate::sandbox::Registry;
-use crate::tool_utils as fs_utils;
+use crate::tool_utils::{self as fs_utils, deserialize_bool_flexible};
 
-use super::{Tool, deserialize_bool_flexible};
+use super::Tool;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct EditParams {
