@@ -4,17 +4,10 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+use crate::tool_utils::{DEFAULT_MAX_BYTES, truncate_bytes};
 use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
 use super::Tool;
-
-/// Default byte cap applied to the output of every read. Large enough for
-/// virtually any source file; small enough to protect the context window.
-pub const DEFAULT_MAX_BYTES: u64 = 20_000;
-
-/// String appended at the end of the read when file size exceeds the `max_bytes` parameter.
-const TRUNCATION_WARNING: &str =
-    "\n<warning>The file has been truncated due to max_bytes limit</warning>";
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ReadParams {
@@ -83,24 +76,6 @@ impl Tool for ReadFileTool {
     }
 }
 
-/// Truncate `content` to at most `max_bytes` bytes, respecting UTF-8 character
-/// boundaries. If truncation occurs, a warning marker is appended. Pass `0`
-/// to disable the limit.
-pub(crate) fn truncate_bytes(content: String, max_bytes: u64) -> String {
-    let limit = max_bytes as usize;
-    if limit == 0 || content.len() <= limit {
-        return content;
-    }
-    // Walk back from the limit to the nearest UTF-8 character boundary.
-    let mut end = limit;
-    while !content.is_char_boundary(end) {
-        end -= 1;
-    }
-    let mut truncated = content[..end].to_string();
-    truncated.push_str(TRUNCATION_WARNING);
-    truncated
-}
-
 /// Apply an optional line window to `content`.
 ///
 /// `offset` is 1-indexed (line 1 = first line of the file).
@@ -126,6 +101,7 @@ pub(crate) fn apply_window(content: String, offset: Option<u64>, limit: Option<u
 mod tests {
     use super::*;
     use crate::Sandbox;
+    use crate::tool_utils::TRUNCATION_WARNING;
     use std::fs;
     use tempfile::TempDir;
 

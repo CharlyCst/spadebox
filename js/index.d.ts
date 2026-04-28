@@ -102,8 +102,9 @@ export declare class SpadeBox {
    * Pass `body` for methods that send a request body (POST, PUT, PATCH).
    * When `raw` is `false` (default), HTML responses are converted to Markdown.
    * Set `raw` to `true` to receive the raw response body unchanged.
+   * `maxBytes` caps the number of bytes returned (default: 20 000). Pass `0` to disable.
    */
-  fetch(url: string, method: string, body?: string | undefined | null, raw?: boolean | undefined | null): Promise<string>
+  fetch(url: string, method: string, body?: string | undefined | null, raw?: boolean | undefined | null, maxBytes?: number | undefined | null): Promise<string>
   /**
    * Enable the JavaScript tools. Returns `this` for chaining.
    *

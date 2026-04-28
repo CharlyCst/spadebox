@@ -1,7 +1,7 @@
 mod error;
-mod fs_utils;
 mod js_runtime;
 mod sandbox;
+mod tool_utils;
 pub mod tools;
 
 pub use error::{ToolError, ToolResult};

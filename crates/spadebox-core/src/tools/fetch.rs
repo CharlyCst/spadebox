@@ -14,6 +14,7 @@ use reqwest::Client;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
+use crate::tool_utils::{DEFAULT_MAX_BYTES, truncate_bytes};
 use crate::{Sandbox, ToolError, ToolResult, sandbox::HttpVerb};
 
 use super::{Tool, deserialize_bool_flexible};
@@ -34,6 +35,8 @@ pub struct FetchParams {
     /// consumption (e.g. convert HTML to markdown). Default to `false`
     #[serde(default, deserialize_with = "deserialize_bool_flexible")]
     pub raw: bool,
+    /// Maximum number of bytes to return. Defaults to 20 000. Set to 0 to disable.
+    pub max_bytes: Option<u64>,
 }
 
 // ---------------------------------------------------------------------------
@@ -118,11 +121,16 @@ impl Tool for FetchTool {
             return Ok(format!("HTTP {}", status.as_u16()));
         }
 
-        if params.raw {
-            Ok(body)
+        let result = if params.raw {
+            body
         } else {
-            process_body(content_type.as_deref(), &body)
-        }
+            process_body(content_type.as_deref(), &body)?
+        };
+
+        Ok(truncate_bytes(
+            result,
+            params.max_bytes.unwrap_or(DEFAULT_MAX_BYTES),
+        ))
     }
 }
 
@@ -183,6 +191,7 @@ mod tests {
                 method: "GET".into(),
                 body: None,
                 raw: false,
+                max_bytes: None,
             },
         )
         .await;
@@ -203,6 +212,7 @@ mod tests {
                 method: "GET".into(),
                 body: None,
                 raw: false,
+                max_bytes: None,
             },
         )
         .await;
@@ -223,6 +233,7 @@ mod tests {
                 method: "GET".into(),
                 body: None,
                 raw: false,
+                max_bytes: None,
             },
         )
         .await;
@@ -243,6 +254,7 @@ mod tests {
                 method: "POST".into(),
                 body: None,
                 raw: false,
+                max_bytes: None,
             },
         )
         .await;

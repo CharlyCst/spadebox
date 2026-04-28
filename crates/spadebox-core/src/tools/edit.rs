@@ -6,8 +6,8 @@ use serde::Deserialize;
 
 use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
-use crate::fs_utils;
 use crate::sandbox::Registry;
+use crate::tool_utils as fs_utils;
 
 use super::{Tool, deserialize_bool_flexible};
 

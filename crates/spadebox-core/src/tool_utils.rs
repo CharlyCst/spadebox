@@ -4,6 +4,36 @@ use cap_std::time::SystemTime;
 use crate::sandbox::Registry;
 use crate::{ToolError, ToolResult};
 
+// ---------------------------------------------------------------------------
+// Output truncation
+// ---------------------------------------------------------------------------
+
+/// Default byte cap applied to tool outputs. Large enough for virtually any
+/// source file; small enough to protect the context window.
+pub const DEFAULT_MAX_BYTES: u64 = 20_000;
+
+/// String appended at the end of the output when it is truncated by `max_bytes`.
+pub(crate) const TRUNCATION_WARNING: &str =
+    "\n<warning>The file has been truncated due to max_bytes limit</warning>";
+
+/// Truncate `content` to at most `max_bytes` bytes, respecting UTF-8 character
+/// boundaries. If truncation occurs, [`TRUNCATION_WARNING`] is appended. Pass
+/// `0` to disable the limit.
+pub(crate) fn truncate_bytes(content: String, max_bytes: u64) -> String {
+    let limit = max_bytes as usize;
+    if limit == 0 || content.len() <= limit {
+        return content;
+    }
+    // Walk back from the limit to the nearest UTF-8 character boundary.
+    let mut end = limit;
+    while !content.is_char_boundary(end) {
+        end -= 1;
+    }
+    let mut truncated = content[..end].to_string();
+    truncated.push_str(TRUNCATION_WARNING);
+    truncated
+}
+
 /// Checks that `path` was read before writing and has not been modified externally.
 ///
 /// Compares the mtime stored in the registry against the file's current mtime.

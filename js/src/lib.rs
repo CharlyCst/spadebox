@@ -257,6 +257,7 @@ impl SpadeBox {
   /// Pass `body` for methods that send a request body (POST, PUT, PATCH).
   /// When `raw` is `false` (default), HTML responses are converted to Markdown.
   /// Set `raw` to `true` to receive the raw response body unchanged.
+  /// `maxBytes` caps the number of bytes returned (default: 20 000). Pass `0` to disable.
   #[napi]
   pub async fn fetch(
     &self,
@@ -264,6 +265,7 @@ impl SpadeBox {
     method: String,
     body: Option<String>,
     raw: Option<bool>,
+    max_bytes: Option<u32>,
   ) -> napi::Result<String> {
     FetchTool::run(
       &self.inner,
@@ -272,6 +274,7 @@ impl SpadeBox {
         method,
         body,
         raw: raw.unwrap_or(false),
+        max_bytes: max_bytes.map(Into::into),
       },
     )
     .await

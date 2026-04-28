@@ -16,7 +16,7 @@
 - [ ] Make description dynamic, so it can be based on the configured options. E.g, allowed verbs, or http/https. Same for schema description.
 - [ ] Add optional sub-agent prompt for summarization. Will require using a callback.
 - [ ] Add optional filtering based on a JS script (available only if JS scripting is enabled).
-- [ ] Add support for limit (in bytes?). Limit is applied to post-processed documents, or raw if raw is set to true. Add some reasonable default limit (how much? see https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-fetch-tool for claude's recommend limits)? Set to 0 to disable limit?
+- [X] Add support for limit (in bytes?). Limit is applied to post-processed documents, or raw if raw is set to true. Add some reasonable default limit (how much? see https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-fetch-tool for claude's recommend limits)? Set to 0 to disable limit?
 
 ## Grep
 
