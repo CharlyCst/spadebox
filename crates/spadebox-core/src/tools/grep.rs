@@ -292,6 +292,28 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn glob_with_leading_slash_matches() {
+        let (dir, sandbox) = setup();
+        fs::create_dir(dir.path().join("src")).unwrap();
+        fs::write(dir.path().join("src/code.rs"), "let x = 1;\n").unwrap();
+        fs::write(dir.path().join("src/note.txt"), "let x = 1;\n").unwrap();
+
+        let result = GrepTool::run(
+            &sandbox,
+            GrepParams {
+                pattern: "let x".to_string(),
+                glob: Some("/src/**/*.rs".to_string()),
+                context_lines: 0,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(result.contains("src/code.rs"), "got: {result}");
+        assert!(!result.contains("note.txt"), "got: {result}");
+    }
+
+    #[tokio::test]
     async fn no_matches_returns_message() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("empty.txt"), "nothing here\n").unwrap();

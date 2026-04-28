@@ -109,6 +109,9 @@ where
 pub(super) fn build_glob_set(glob: Option<&str>) -> ToolResult<GlobSet> {
     let mut builder = GlobSetBuilder::new();
     let pattern = glob.unwrap_or("**/*");
+    // Strip a leading slash: display paths are always relative (e.g. "src/main.rs"),
+    // so a pattern like "/src/**" would never match without this normalization.
+    let pattern = pattern.trim_start_matches('/');
     builder.add(Glob::new(pattern).map_err(|e| ToolError::InvalidPattern(e.to_string()))?);
     builder
         .build()
@@ -280,6 +283,24 @@ mod tests {
         .unwrap();
 
         assert_eq!(result, "No files found.");
+    }
+
+    #[tokio::test]
+    async fn leading_slash_in_pattern_is_stripped() {
+        let (dir, sandbox) = setup();
+        fs::create_dir(dir.path().join("src")).unwrap();
+        fs::write(dir.path().join("src/foo.rs"), "").unwrap();
+
+        let result = GlobTool::run(
+            &sandbox,
+            GlobParams {
+                pattern: "/src/**/*.rs".to_string(),
+            },
+        )
+        .await
+        .unwrap();
+
+        assert!(result.contains("src/foo.rs"), "got: {result}");
     }
 
     #[tokio::test]
