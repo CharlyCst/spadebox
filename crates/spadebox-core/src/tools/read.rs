@@ -4,7 +4,7 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::tool_utils::{DEFAULT_MAX_BYTES, truncate_bytes};
+use crate::tool_utils::{self as fs_utils, DEFAULT_MAX_BYTES, truncate_bytes};
 use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
 use super::Tool;
@@ -44,10 +44,10 @@ impl Tool for ReadFileTool {
         // open() and read_to_end() are both blocking syscalls. Run them on a
         // dedicated thread to avoid stalling the async executor.
         tokio::task::spawn_blocking(move || {
+            let path = fs_utils::normalize_path(&params.path).to_string();
+
             // SANDBOX: fd-relative open enforced by cap-std / RESOLVE_BENEATH.
-            let mut file = root
-                .open(&params.path)
-                .map_err(|e| map_io_err(&params.path, e))?;
+            let mut file = root.open(&path).map_err(|e| map_io_err(&path, e))?;
 
             // `cap_std::fs::File` implements `std::io::Read` by calling the
             // `read` syscall on the already-open file descriptor. No path
@@ -62,7 +62,7 @@ impl Tool for ReadFileTool {
                 .metadata()
                 .and_then(|m| m.modified())
                 .map_err(ToolError::IoError)?;
-            registry.lock().unwrap().insert(params.path.clone(), mtime);
+            registry.lock().unwrap().insert(path.clone(), mtime);
 
             let content = String::from_utf8_lossy(&buf).into_owned();
             let windowed = apply_window(content, params.offset, params.limit);
@@ -151,6 +151,26 @@ mod tests {
         .unwrap();
 
         assert_eq!(result, "nested");
+    }
+
+    #[tokio::test]
+    async fn leading_slash_is_stripped() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("hello.txt"), "hello world").unwrap();
+
+        let result = ReadFileTool::run(
+            &sandbox,
+            ReadParams {
+                path: "/hello.txt".into(),
+                limit: None,
+                offset: None,
+                max_bytes: None,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(result, "hello world");
     }
 
     #[tokio::test]

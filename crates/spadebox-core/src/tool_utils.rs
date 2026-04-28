@@ -10,6 +10,15 @@ use crate::{ToolError, ToolResult};
 /// source file; small enough to protect the context window.
 pub const DEFAULT_MAX_BYTES: u64 = 20_000;
 
+/// Strip a leading `/` from a path so that sandbox-root-relative paths like
+/// `/src/main.rs` are treated the same as `src/main.rs`.
+///
+/// cap-std's `RESOLVE_BENEATH` enforcement rejects absolute paths, so without
+/// this normalization any tool call that includes a leading slash would fail.
+pub(crate) fn normalize_path(path: &str) -> &str {
+    path.trim_start_matches('/')
+}
+
 /// String appended at the end of the output when it is truncated by `max_bytes`.
 pub(crate) const TRUNCATION_WARNING: &str =
     "\n<warning>The file has been truncated due to max_bytes limit</warning>";

@@ -53,7 +53,13 @@ impl Tool for EditFileTool {
     }
 }
 
-fn do_edit(root: cap_std::fs::Dir, params: EditParams, registry: &Registry) -> ToolResult<String> {
+fn do_edit(
+    root: cap_std::fs::Dir,
+    mut params: EditParams,
+    registry: &Registry,
+) -> ToolResult<String> {
+    params.path = fs_utils::normalize_path(&params.path).to_string();
+
     // Enforce read-before-write and check for external modifications.
     let current_mtime = root
         .metadata(&params.path)
@@ -189,6 +195,30 @@ mod tests {
         assert_eq!(
             fs::read_to_string(dir.path().join("f.txt")).unwrap(),
             "b b b"
+        );
+    }
+
+    #[tokio::test]
+    async fn leading_slash_is_stripped() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("f.txt"), "hello world").unwrap();
+        read(&sandbox, "/f.txt").await;
+
+        EditFileTool::run(
+            &sandbox,
+            EditParams {
+                path: "/f.txt".into(),
+                old_string: "world".into(),
+                new_string: "rust".into(),
+                replace_all: false,
+            },
+        )
+        .await
+        .unwrap();
+
+        assert_eq!(
+            fs::read_to_string(dir.path().join("f.txt")).unwrap(),
+            "hello rust"
         );
     }
 

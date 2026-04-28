@@ -64,9 +64,11 @@ impl Tool for WriteFileTool {
 /// and `params`, and to keep the logic readable outside the async context.
 fn do_write(
     root: cap_std::fs::Dir,
-    params: WriteParams,
+    mut params: WriteParams,
     registry: &Registry,
 ) -> ToolResult<String> {
+    params.path = fs_utils::normalize_path(&params.path).to_string();
+
     if params.path.ends_with('/') {
         // Path ending with '/' is an explicit request to create a directory.
         // Trim the trailing slash for the cap-std call; create_dir_all handles
@@ -162,6 +164,25 @@ mod tests {
         assert_eq!(
             fs::read_to_string(dir.path().join("a/b/c.txt")).unwrap(),
             "deep"
+        );
+    }
+
+    #[tokio::test]
+    async fn leading_slash_is_stripped() {
+        let (dir, sandbox) = setup();
+        WriteFileTool::run(
+            &sandbox,
+            WriteParams {
+                path: "/hello.txt".into(),
+                content: "hello".into(),
+                create_dirs: false,
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(
+            fs::read_to_string(dir.path().join("hello.txt")).unwrap(),
+            "hello"
         );
     }
 
