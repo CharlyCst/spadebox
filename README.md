@@ -21,6 +21,7 @@ Currently, Spadebox includes the following tools:
 - `read_file`
 - `write_file`
 - `edit_file`
+- `move`
 - `grep`
 - `glob`
 - `fetch`

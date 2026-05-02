@@ -1,10 +1,20 @@
+use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
+
 use serde::Deserialize;
 
-use cap_std::fs::File;
+use cap_std::fs::{Dir, File};
 use cap_std::time::SystemTime;
 
-use crate::sandbox::Registry;
 use crate::{ToolError, ToolResult};
+
+/// Registry mapping relative file paths to the mtime recorded at last read.
+///
+/// Used to enforce read-before-write and detect external modifications.
+/// The inner `Mutex` is a `std::sync::Mutex` (not `tokio::sync::Mutex`) because it
+/// is only ever locked on blocking threads inside `spawn_blocking`. Never lock it
+/// across an `.await` point — that would block the async executor.
+pub(crate) type Registry = Arc<Mutex<HashMap<String, SystemTime>>>;
 
 /// Default byte cap applied to tool outputs. Large enough for virtually any
 /// source file; small enough to protect the context window.
@@ -97,5 +107,34 @@ pub(crate) fn update_registry(registry: &Registry, path: &str, file: &File) -> T
         .and_then(|m| m.modified())
         .map_err(ToolError::IoError)?;
     registry.lock().unwrap().insert(path.to_string(), mtime);
+    Ok(())
+}
+
+/// Transfers the registry entry from `src` to `dst` after a successful rename.
+///
+/// If `src` had a registry entry, `dst` is registered with its current mtime
+/// (read from `dst_dir`) so the caller can write to the destination immediately.
+/// If `src` had no entry, any stale `dst` entry is removed — the content at
+/// `dst` has changed and must be read before writing.
+///
+/// # Async safety
+/// Must be called from a `spawn_blocking` closure, never directly in async code.
+pub(crate) fn move_registry_entry(
+    registry: &Registry,
+    src: &str,
+    dst: &str,
+    dst_dir: &Dir,
+) -> ToolResult<()> {
+    let mut reg = registry.lock().unwrap();
+    let had_src = reg.remove(src).is_some();
+    if had_src {
+        if let Ok(meta) = dst_dir.metadata(dst)
+            && let Ok(mtime) = meta.modified()
+        {
+            reg.insert(dst.to_string(), mtime);
+        }
+    } else {
+        reg.remove(dst);
+    }
     Ok(())
 }

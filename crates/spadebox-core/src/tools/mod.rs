@@ -8,6 +8,7 @@ mod fetch;
 mod glob;
 mod grep;
 mod js_repl;
+mod r#move;
 mod read;
 mod write;
 
@@ -16,6 +17,7 @@ pub use fetch::{FetchParams, FetchTool};
 pub use glob::{GlobParams, GlobTool};
 pub use grep::{GrepParams, GrepTool};
 pub use js_repl::{JsReplParams, JsReplTool};
+pub use r#move::{MoveParams, MoveTool};
 pub use read::{ReadFileTool, ReadParams};
 pub use write::{WriteFileTool, WriteParams};
 
@@ -102,6 +104,7 @@ pub fn enabled_tools(sandbox: &Sandbox) -> Vec<ToolDef> {
         tools.push(EditFileTool::def());
         tools.push(GlobTool::def());
         tools.push(GrepTool::def());
+        tools.push(MoveTool::def());
     }
     if sandbox.http.is_enabled() {
         tools.push(FetchTool::def());
@@ -137,6 +140,9 @@ pub async fn call_tool(
         }
         GrepTool::NAME if sandbox.files.is_enabled() => {
             GrepTool::call_json(sandbox, params_json).await
+        }
+        MoveTool::NAME if sandbox.files.is_enabled() => {
+            MoveTool::call_json(sandbox, params_json).await
         }
         FetchTool::NAME if sandbox.http.is_enabled() => {
             FetchTool::call_json(sandbox, params_json).await

@@ -9,7 +9,8 @@ use spadebox_core::{
   DomainRule, HttpVerb, Sandbox, enabled_tools,
   tools::{
     EditFileTool, EditParams, FetchParams, FetchTool, GlobParams, GlobTool, GrepParams, GrepTool,
-    JsReplParams, JsReplTool, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
+    JsReplParams, JsReplTool, MoveParams, MoveTool, ReadFileTool, ReadParams, Tool, WriteFileTool,
+    WriteParams,
   },
 };
 
@@ -304,6 +305,33 @@ impl SpadeBox {
     JsReplTool::run(&self.inner, JsReplParams { code })
       .await
       .map_err(to_napi_err)
+  }
+
+  /// Move or rename a file or directory, or delete it. Calls the `move` tool directly.
+  ///
+  /// `src` is the source path relative to the sandbox root. `dst` is the
+  /// destination path; omit it (pass `null`) when deleting.
+  /// Set `overwrite` to `true` to replace an existing destination. Set `delete` to `true`
+  /// (with no `dst`) to delete `src` instead of moving it.
+  #[napi(js_name = "move")]
+  pub async fn mv(
+    &self,
+    src: String,
+    dst: Option<String>,
+    overwrite: Option<bool>,
+    del: Option<bool>,
+  ) -> napi::Result<String> {
+    MoveTool::run(
+      &self.inner,
+      MoveParams {
+        src,
+        dst,
+        overwrite: overwrite.unwrap_or(false),
+        delete: del.unwrap_or(false),
+      },
+    )
+    .await
+    .map_err(to_napi_err)
   }
 
   /// Replace text within a file. Calls the `edit_file` tool directly.

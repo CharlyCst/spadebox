@@ -124,6 +124,15 @@ export declare class SpadeBox {
    */
   jsRepl(code: string): Promise<string>
   /**
+   * Move or rename a file or directory, or delete it. Calls the `move` tool directly.
+   *
+   * `src` is the source path relative to the sandbox root. `dst` is the
+   * destination path; omit it (pass `null`) when deleting.
+   * Set `overwrite` to `true` to replace an existing destination. Set `delete` to `true`
+   * (with no `dst`) to delete `src` instead of moving it.
+   */
+  move(src: string, dst?: string | undefined | null, overwrite?: boolean | undefined | null, del?: boolean | undefined | null): Promise<string>
+  /**
    * Replace text within a file. Calls the `edit_file` tool directly.
    *
    * Finds the exact string `oldString` in the file at `path` and replaces it

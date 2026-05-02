@@ -2,18 +2,10 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 
+use crate::tool_utils::Registry;
 use crate::{ToolError, ToolResult};
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
-use cap_std::time::SystemTime;
-
-/// Registry mapping relative file paths to the mtime recorded at last read.
-///
-/// Used to enforce read-before-write and detect external modifications.
-/// The inner `Mutex` is a `std::sync::Mutex` (not `tokio::sync::Mutex`) because it
-/// is only ever locked on blocking threads inside `spawn_blocking`. Never lock it
-/// across an `.await` point — that would block the async executor.
-pub(crate) type Registry = Arc<Mutex<HashMap<String, SystemTime>>>;
 
 // ---------------------------------------------------------------------------
 // HTTP configuration

@@ -15,8 +15,8 @@ import type { SbTool } from '@spadebox/spadebox'
 // --- Choose the API endpoint and model ---
 
 // Codestral API, requires a codestral API key
-const MISTRAL_API_URL = 'https://codestral.mistral.ai/v1/chat/completions';
-const MODEL = 'codestral-latest';
+const MISTRAL_API_URL = 'https://codestral.mistral.ai/v1/chat/completions'
+const MODEL = 'codestral-latest'
 
 // Mistral API, requires a Mistral API key
 // const MISTRAL_API_URL = 'https://api.mistral.ai/v1/chat/completions';
@@ -24,13 +24,12 @@ const MODEL = 'codestral-latest';
 
 // --- Colors ---
 
-const RESET  = '\x1b[0m'
-const BLUE   = '\x1b[34m'
-const GREEN  = '\x1b[32m'
-const RED    = '\x1b[31m'
-const GRAY   = '\x1b[90m'
-const CYAN   = '\x1b[36m'
-
+const RESET = '\x1b[0m'
+const BLUE = '\x1b[34m'
+const GREEN = '\x1b[32m'
+const RED = '\x1b[31m'
+const GRAY = '\x1b[90m'
+const CYAN = '\x1b[36m'
 
 // --- Validate args and environment ---
 

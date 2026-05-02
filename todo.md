@@ -35,7 +35,7 @@
 ## General
 
 - [ ] Make a strict separation between ToolResult (for agents), and other results (e.g. when creating the Sandbox or configuring HTTP allowlist).
-- [ ] Add a "move" tool to move files and folders, with the ability to delete if there is no target (or a delete option, probably safer).
+- [X] Add a "move" tool to move files and folders, with the ability to delete if there is no target (or a delete option, probably safer).
       Note: we might need to think about how this interacts with the read timestamp.
 - [ ] Add a proper Spadebox reset function (for now the best solution is to construct a new Spadebox instance when re-setting the agent context).
 - [ ] Doc: explain somewhere that spadebox is designed to not require bash execution tool (but one can be provided in addition if desired).
