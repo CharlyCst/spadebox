@@ -2321,7 +2321,7 @@ dependencies = [
 
 [[package]]
 name = "spadebox-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "boa_engine",
  "cap-std",
@@ -2353,7 +2353,7 @@ dependencies = [
 
 [[package]]
 name = "spadebox-mcp"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "anyhow",
  "clap",

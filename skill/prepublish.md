@@ -14,6 +14,21 @@ This skill covers publishing both the Rust crates and the JS bindings.
 
 ---
 
+## Changelog
+
+Before bumping any version, add a new entry to `CHANGELOG.md` for the release:
+
+1. Add a `## [<new-version>] - <date>` section at the top (below the header).
+2. Populate it from the git log since the previous release:
+   ```
+   git log <prev-tag>..HEAD --oneline
+   ```
+   Group changes under `### Added`, `### Changed`, or `### Fixed` as appropriate.
+   Skip internal chores (formatting, todos, CI tweaks).
+3. Commit the changelog update together with the version bumps.
+
+---
+
 ## Rust Crates
 
 Rust crates are published manually by the user.
