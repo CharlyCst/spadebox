@@ -13,6 +13,7 @@ use spadebox_core::{
     WriteParams,
   },
 };
+use std::sync::Arc;
 
 fn to_napi_err(e: spadebox_core::ToolError) -> napi::Error {
   napi::Error::from_reason(e.to_string())
@@ -44,7 +45,7 @@ pub struct SbToolResult {
 
 #[napi]
 pub struct SpadeBox {
-  inner: Sandbox,
+  inner: Arc<Sandbox>,
 }
 
 #[napi]
@@ -58,7 +59,7 @@ impl SpadeBox {
   #[napi(constructor)]
   pub fn new() -> Self {
     Self {
-      inner: Sandbox::new(),
+      inner: Arc::new(Sandbox::new()),
     }
   }
 
@@ -68,7 +69,7 @@ impl SpadeBox {
   /// `this` for chaining. Throws if `path` cannot be opened.
   #[napi]
   pub fn enable_files<'env>(&mut self, path: String, this: This<'env>) -> napi::Result<This<'env>> {
-    self.inner.files.enable(&path).map_err(to_napi_err)?;
+    self.inner.enable_fs(&path).map_err(to_napi_err)?;
     Ok(this)
   }
 
@@ -209,7 +210,7 @@ impl SpadeBox {
   /// ```
   #[napi]
   pub fn set_user_agent<'env>(&mut self, user_agent: String, this: This<'env>) -> This<'env> {
-    self.inner.http.set_user_agent(user_agent);
+    self.inner.set_user_agent(user_agent);
     this
   }
 
@@ -220,7 +221,7 @@ impl SpadeBox {
   /// ```
   #[napi]
   pub fn enable_http<'env>(&mut self, this: This<'env>) -> This<'env> {
-    self.inner.http.enable();
+    self.inner.enable_http();
     this
   }
 
@@ -247,7 +248,7 @@ impl SpadeBox {
       })
       .collect::<napi::Result<Vec<_>>>()?;
     let rule = DomainRule::new(pattern, parsed_verbs).map_err(to_napi_err)?;
-    self.inner.http.allow(rule);
+    self.inner.allow(rule);
     Ok(this)
   }
 
@@ -292,7 +293,7 @@ impl SpadeBox {
   /// ```
   #[napi]
   pub fn enable_js<'env>(&mut self, this: This<'env>) -> This<'env> {
-    self.inner.js.enable();
+    self.inner.enable_js();
     this
   }
 

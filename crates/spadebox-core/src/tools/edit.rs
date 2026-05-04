@@ -4,9 +4,8 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
+use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
-use crate::tool_utils::Registry;
 use crate::tool_utils::{self as fs_utils, deserialize_bool_flexible};
 
 use super::Tool;
@@ -36,29 +35,21 @@ impl Tool for EditFileTool {
          If the string appears multiple times and you want to replace all of them, set replace_all to true. \
          Always read the file before editing to ensure 'old_string' matches the current content exactly.";
 
-    async fn run(sandbox: &Sandbox, params: EditParams) -> ToolResult<String> {
-        // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
-        //
-        // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
-        // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
-        // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox.files.try_clone_root()?;
-        let registry = Arc::clone(&sandbox.files.read_registry);
+    async fn run(sandbox: impl AsArc<Sandbox> + Send, params: EditParams) -> ToolResult<String> {
+        let sandbox = sandbox.as_arc();
 
         // open(), read_to_end(), create(), and write_all() are all blocking
         // syscalls. Run them on a dedicated thread to avoid stalling the executor.
-        tokio::task::spawn_blocking(move || do_edit(root, params, &registry))
+        tokio::task::spawn_blocking(move || do_edit(sandbox, params))
             .await
             .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }
 }
 
-fn do_edit(
-    root: cap_std::fs::Dir,
-    mut params: EditParams,
-    registry: &Registry,
-) -> ToolResult<String> {
+fn do_edit(sandbox: Arc<Sandbox>, mut params: EditParams) -> ToolResult<String> {
     params.path = fs_utils::normalize_path(&params.path).to_string();
+    let mut fs_config = sandbox.files.write().unwrap();
+    let root = fs_config.root.as_ref().expect("Missing sandbox root");
 
     // Enforce read-before-write and check for external modifications.
     let current_mtime = root
@@ -66,7 +57,7 @@ fn do_edit(
         .map_err(|e| map_io_err(&params.path, e))?
         .modified()
         .map_err(ToolError::IoError)?;
-    fs_utils::check_write_allowed(registry, &params.path, current_mtime)?;
+    fs_utils::check_write_allowed(&fs_config.read_registry, &params.path, current_mtime)?;
 
     // SANDBOX: fd-relative open enforced by cap-std / RESOLVE_BENEATH.
     let mut file = root
@@ -112,7 +103,7 @@ fn do_edit(
         .map_err(ToolError::IoError)?;
 
     // Update the registry with the new mtime so subsequent writes are allowed.
-    fs_utils::update_registry(registry, &params.path, &file)?;
+    fs_utils::update_registry(&mut fs_config.read_registry, &params.path, &file)?;
 
     let replacements = if params.replace_all { count } else { 1 };
     Ok(format!(
@@ -129,14 +120,14 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn setup() -> (TempDir, Sandbox) {
+    fn setup() -> (TempDir, Arc<Sandbox>) {
         let dir = TempDir::new().unwrap();
-        let mut sandbox = Sandbox::new();
-        sandbox.files.enable(dir.path()).unwrap();
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
         (dir, sandbox)
     }
 
-    async fn read(sandbox: &Sandbox, path: &str) {
+    async fn read(sandbox: impl AsArc<Sandbox> + Send, path: &str) {
         ReadFileTool::run(
             sandbox,
             ReadParams {
@@ -154,10 +145,10 @@ mod tests {
     async fn replaces_string() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "hello world").unwrap();
-        read(&sandbox, "f.txt").await;
+        read(Arc::clone(&sandbox), "f.txt").await;
 
         EditFileTool::run(
-            &sandbox,
+            Arc::clone(&sandbox),
             EditParams {
                 path: "f.txt".into(),
                 old_string: "world".into(),
@@ -178,10 +169,10 @@ mod tests {
     async fn replace_all_replaces_every_occurrence() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "a a a").unwrap();
-        read(&sandbox, "f.txt").await;
+        read(Arc::clone(&sandbox), "f.txt").await;
 
         EditFileTool::run(
-            &sandbox,
+            Arc::clone(&sandbox),
             EditParams {
                 path: "f.txt".into(),
                 old_string: "a".into(),
@@ -202,7 +193,7 @@ mod tests {
     async fn leading_slash_is_stripped() {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("f.txt"), "hello world").unwrap();
-        read(&sandbox, "/f.txt").await;
+        read(Arc::clone(&sandbox), "/f.txt").await;
 
         EditFileTool::run(
             &sandbox,

@@ -1,11 +1,10 @@
 use std::io::{self, Read};
-use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::tool_utils::{self as fs_utils, DEFAULT_MAX_BYTES, truncate_bytes};
-use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
+use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
 use super::Tool;
 
@@ -32,14 +31,8 @@ impl Tool for ReadFileTool {
          Returns the file's content as a UTF-8 string. \
          Use `offset` (1-indexed) and `limit` to read a specific range of lines.";
 
-    async fn run(sandbox: &Sandbox, params: ReadParams) -> ToolResult<String> {
-        // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
-        //
-        // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
-        // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
-        // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox.files.try_clone_root()?;
-        let registry = Arc::clone(&sandbox.files.read_registry);
+    async fn run(sandbox: impl AsArc<Sandbox> + Send, params: ReadParams) -> ToolResult<String> {
+        let sandbox = sandbox.as_arc();
 
         // open() and read_to_end() are both blocking syscalls. Run them on a
         // dedicated thread to avoid stalling the async executor.
@@ -47,7 +40,17 @@ impl Tool for ReadFileTool {
             let path = fs_utils::normalize_path(&params.path).to_string();
 
             // SANDBOX: fd-relative open enforced by cap-std / RESOLVE_BENEATH.
-            let mut file = root.open(&path).map_err(|e| map_io_err(&path, e))?;
+            // Use a read lock just for open() — the returned File is an owned fd
+            // that remains valid after the lock is dropped.
+            let mut file = {
+                let fs_config = sandbox.files.read().unwrap();
+                fs_config
+                    .root
+                    .as_ref()
+                    .expect("Missing sandbox root")
+                    .open(&path)
+                    .map_err(|e| map_io_err(&path, e))?
+            };
 
             // `cap_std::fs::File` implements `std::io::Read` by calling the
             // `read` syscall on the already-open file descriptor. No path
@@ -62,7 +65,7 @@ impl Tool for ReadFileTool {
                 .metadata()
                 .and_then(|m| m.modified())
                 .map_err(ToolError::IoError)?;
-            registry.lock().unwrap().insert(path.clone(), mtime);
+            sandbox.files.write().unwrap().read_registry.insert(path.clone(), mtime);
 
             let content = String::from_utf8_lossy(&buf).into_owned();
             let windowed = apply_window(content, params.offset, params.limit);
@@ -103,12 +106,13 @@ mod tests {
     use crate::Sandbox;
     use crate::tool_utils::TRUNCATION_WARNING;
     use std::fs;
+    use std::sync::Arc;
     use tempfile::TempDir;
 
-    fn setup() -> (TempDir, Sandbox) {
+    fn setup() -> (TempDir, Arc<Sandbox>) {
         let dir = TempDir::new().unwrap();
-        let mut sandbox = Sandbox::new();
-        sandbox.files.enable(dir.path()).unwrap();
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
         (dir, sandbox)
     }
 
@@ -118,7 +122,7 @@ mod tests {
         fs::write(dir.path().join("hello.txt"), "hello world").unwrap();
 
         let result = ReadFileTool::run(
-            &sandbox,
+            sandbox,
             ReadParams {
                 path: "hello.txt".into(),
                 limit: None,
@@ -139,7 +143,7 @@ mod tests {
         fs::write(dir.path().join("sub/file.txt"), "nested").unwrap();
 
         let result = ReadFileTool::run(
-            &sandbox,
+            sandbox,
             ReadParams {
                 path: "sub/file.txt".into(),
                 limit: None,
@@ -159,7 +163,7 @@ mod tests {
         fs::write(dir.path().join("hello.txt"), "hello world").unwrap();
 
         let result = ReadFileTool::run(
-            &sandbox,
+            sandbox,
             ReadParams {
                 path: "/hello.txt".into(),
                 limit: None,
@@ -178,7 +182,7 @@ mod tests {
         let (_dir, sandbox) = setup();
 
         let result = ReadFileTool::run(
-            &sandbox,
+            sandbox,
             ReadParams {
                 path: "nope.txt".into(),
                 limit: None,
@@ -196,7 +200,7 @@ mod tests {
         let (_dir, sandbox) = setup();
 
         let result = ReadFileTool::run(
-            &sandbox,
+            sandbox,
             ReadParams {
                 path: "../etc/passwd".into(),
                 limit: None,

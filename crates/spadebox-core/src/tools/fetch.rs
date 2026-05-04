@@ -15,7 +15,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::tool_utils::{DEFAULT_MAX_BYTES, deserialize_bool_flexible, truncate_bytes};
-use crate::{Sandbox, ToolError, ToolResult, sandbox::HttpVerb};
+use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::HttpVerb};
 
 use super::Tool;
 
@@ -53,8 +53,9 @@ impl Tool for FetchTool {
         The URL must use the http or https scheme. \
         Available methods and domains are determined by the sandbox configuration.";
 
-    async fn run(sandbox: &Sandbox, params: FetchParams) -> ToolResult<String> {
-        if !sandbox.http.enabled {
+    async fn run(sandbox: impl AsArc<Sandbox> + Send, params: FetchParams) -> ToolResult<String> {
+        let sandbox = sandbox.as_arc();
+        if !sandbox.http_is_enabled() {
             return Err(ToolError::PermissionDenied(
                 "HTTP fetch is disabled".to_string(),
             ));
@@ -75,26 +76,33 @@ impl Tool for FetchTool {
         let host = url
             .host_str()
             .ok_or_else(|| ToolError::InvalidUrl("URL has no host".to_string()))?;
-
-        // Find the first matching domain rule.
-        let allowed_verbs = sandbox.http.allowed_verbs_for(host)?;
-
-        // Validate the requested method against the rule.
         let method_upper = params.method.to_uppercase();
-        let verb = HttpVerb::parse(&method_upper).ok_or_else(|| {
-            ToolError::PermissionDenied(format!("unknown HTTP method '{}'", params.method))
-        })?;
 
-        if !allowed_verbs.contains(&verb) {
-            return Err(ToolError::PermissionDenied(format!(
-                "method '{}' is not allowed for host '{}'",
-                method_upper, host
-            )));
-        }
+        // Lock the http config to check for permission and retrieve the user agent
+        let user_agent = {
+            let http_config = sandbox.http.read().unwrap();
+
+            // Find the first matching domain rule.
+            let allowed_verbs = http_config.allowed_verbs_for(host)?;
+
+            // Validate the requested method against the rule.
+            let verb = HttpVerb::parse(&method_upper).ok_or_else(|| {
+                ToolError::PermissionDenied(format!("unknown HTTP method '{}'", params.method))
+            })?;
+
+            if !allowed_verbs.contains(&verb) {
+                return Err(ToolError::PermissionDenied(format!(
+                    "method '{}' is not allowed for host '{}'",
+                    method_upper, host
+                )));
+            }
+
+            http_config.user_agent.clone()
+        };
 
         // Build and send the request.
         let client = Client::builder()
-            .user_agent(&sandbox.http.user_agent)
+            .user_agent(user_agent)
             .build()
             .map_err(|e| ToolError::HttpError(e.to_string()))?;
         let method = reqwest::Method::from_bytes(method_upper.as_bytes())
@@ -174,9 +182,10 @@ mod tests {
     use super::*;
     use crate::Sandbox;
     use crate::sandbox::{DomainRule, HttpVerb};
+    use std::sync::Arc;
 
-    fn setup_sandbox() -> Sandbox {
-        Sandbox::new()
+    fn setup_sandbox() -> Arc<Sandbox> {
+        Arc::new(Sandbox::new())
     }
 
     // --- Permission checks (no network) ---
@@ -200,10 +209,9 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_unknown_scheme() {
-        let mut sandbox = setup_sandbox();
+        let sandbox = setup_sandbox();
         sandbox
-            .http
-            .enable()
+            .enable_http()
             .allow(DomainRule::new("*", vec![HttpVerb::Get]).unwrap());
         let result = FetchTool::run(
             &sandbox,
@@ -221,10 +229,9 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_unmatched_domain() {
-        let mut sandbox = setup_sandbox();
+        let sandbox = setup_sandbox();
         sandbox
-            .http
-            .enable()
+            .enable_http()
             .allow(DomainRule::new("*.example.com", vec![HttpVerb::Get]).unwrap());
         let result = FetchTool::run(
             &sandbox,
@@ -242,10 +249,9 @@ mod tests {
 
     #[tokio::test]
     async fn rejects_disallowed_verb() {
-        let mut sandbox = setup_sandbox();
+        let sandbox = setup_sandbox();
         sandbox
-            .http
-            .enable()
+            .enable_http()
             .allow(DomainRule::new("example.com", vec![HttpVerb::Get]).unwrap());
         let result = FetchTool::run(
             &sandbox,

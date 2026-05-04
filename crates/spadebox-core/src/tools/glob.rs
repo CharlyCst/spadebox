@@ -25,7 +25,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
+use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err, AsArc};
 
 use super::Tool;
 
@@ -144,25 +144,22 @@ impl Tool for GlobTool {
         Use '**' to match across directories (e.g. '**/*.rs' finds all Rust files, \
         'src/**/*.ts' finds TypeScript files under src/).";
 
-    async fn run(sandbox: &Sandbox, params: GlobParams) -> ToolResult<String> {
+    async fn run(sandbox: impl AsArc<Sandbox> + Send, params: GlobParams) -> ToolResult<String> {
+        let sandbox = sandbox.as_arc();
+
         // Compile the glob pattern eagerly on the calling thread so we can
         // return a structured error before touching the filesystem.
         let glob_set = build_glob_set(Some(&params.pattern))?;
 
-        // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
-        //
-        // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
-        // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
-        // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox.files.try_clone_root()?;
-
         // Directory walking is synchronous. Run on a dedicated blocking thread
         // to avoid stalling the async executor.
         let output = tokio::task::spawn_blocking(move || {
+            let fs_config = sandbox.files.read().unwrap();
+            let root = fs_config.root.as_ref().expect("Missing sandbox root");
             let mut paths: Vec<String> = Vec::new();
 
             // The on_file callback only needs the display path — no file open required.
-            walk(&root, "", &glob_set, &mut |_dir, _name, display_path| {
+            walk(root, "", &glob_set, &mut |_dir, _name, display_path| {
                 paths.push(display_path.to_string());
                 Ok(())
             })?;
@@ -198,12 +195,13 @@ mod tests {
     use super::*;
     use crate::Sandbox;
     use std::fs;
+    use std::sync::Arc;
     use tempfile::TempDir;
 
-    fn setup() -> (TempDir, Sandbox) {
+    fn setup() -> (TempDir, Arc<Sandbox>) {
         let dir = TempDir::new().unwrap();
-        let mut sandbox = Sandbox::new();
-        sandbox.files.enable(dir.path()).unwrap();
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
         (dir, sandbox)
     }
 

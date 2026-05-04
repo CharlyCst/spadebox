@@ -1,7 +1,7 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{Sandbox, ToolResult};
+use crate::{Sandbox, ToolResult, AsArc};
 
 use super::Tool;
 
@@ -26,7 +26,13 @@ impl Tool for JsReplTool {
          The session is persistent: variables and functions defined in one call \
          are available in subsequent calls.";
 
-    async fn run(sandbox: &Sandbox, params: Self::Params) -> ToolResult<String> {
+    async fn run(sandbox: impl AsArc<Sandbox> + Send, params: Self::Params) -> ToolResult<String> {
+        let sandbox = sandbox.as_arc();
+        if !sandbox.js_is_enabled() {
+            return Err(crate::ToolError::PermissionDenied(
+                "JS REPL is disabled".to_string(),
+            ));
+        }
         sandbox.js.repl_eval(params.code).await
     }
 }
@@ -34,10 +40,11 @@ impl Tool for JsReplTool {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::Arc;
 
-    fn js_sandbox() -> Sandbox {
-        let mut sandbox = Sandbox::new();
-        sandbox.js.enable();
+    fn js_sandbox() -> Arc<Sandbox> {
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_js();
         sandbox
     }
 
@@ -89,8 +96,8 @@ mod tests {
 
     #[tokio::test]
     async fn disabled_returns_permission_error() {
-        let sandbox = Sandbox::new(); // js not enabled
-        let err = JsReplTool::run(&sandbox, JsReplParams { code: "1".into() })
+        let sandbox = Arc::new(Sandbox::new()); // js not enabled
+        let err = JsReplTool::run(sandbox, JsReplParams { code: "1".into() })
             .await
             .unwrap_err();
         assert!(matches!(err, crate::ToolError::PermissionDenied(_)));

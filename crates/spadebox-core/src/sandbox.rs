@@ -1,6 +1,7 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, Mutex};
+use std::sync::RwLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::tool_utils::Registry;
 use crate::{ToolError, ToolResult};
@@ -124,9 +125,8 @@ impl DomainRule {
 /// use spadebox_core::Sandbox;
 /// use spadebox_core::{DomainRule, HttpVerb};
 ///
-/// let mut sandbox = Sandbox::new();
-/// sandbox.http
-///     .enable()
+/// let sandbox = Sandbox::new();
+/// sandbox.enable_http()
 ///     .allow(DomainRule::new("api.example.com", vec![HttpVerb::Get, HttpVerb::Post]).unwrap())
 ///     .allow(DomainRule::new("*.cdn.example.com", vec![HttpVerb::Get]).unwrap());
 /// ```
@@ -149,29 +149,6 @@ impl Default for HttpConfig {
 }
 
 impl HttpConfig {
-    /// Returns `true` if HTTP fetching has been enabled.
-    pub fn is_enabled(&self) -> bool {
-        self.enabled
-    }
-
-    /// Enables HTTP fetching and returns `&mut self` for chaining.
-    pub fn enable(&mut self) -> &mut Self {
-        self.enabled = true;
-        self
-    }
-
-    /// Sets the `User-Agent` header sent with every request.
-    pub fn set_user_agent(&mut self, user_agent: impl Into<String>) -> &mut Self {
-        self.user_agent = user_agent.into();
-        self
-    }
-
-    /// Appends a domain rule and returns `&mut self` for chaining.
-    pub fn allow(&mut self, rule: DomainRule) -> &mut Self {
-        self.domain_rules.push(rule);
-        self
-    }
-
     /// Returns the allowed verbs for `host` from the most specific matching rule.
     /// Returns `Err(PermissionDenied)` if no rule matches.
     pub(crate) fn allowed_verbs_for(&self, host: &str) -> crate::ToolResult<&[HttpVerb]> {
@@ -205,8 +182,8 @@ impl HttpConfig {
 /// # use tempfile::TempDir;
 /// # let dir = TempDir::new().unwrap();
 ///
-/// let mut sandbox = Sandbox::new();
-/// sandbox.files.enable(dir.path()).unwrap();
+/// let sandbox = Sandbox::new();
+/// sandbox.enable_fs(dir.path()).unwrap();
 /// ```
 #[derive(Default)]
 pub struct FilesConfig {
@@ -215,32 +192,16 @@ pub struct FilesConfig {
 }
 
 impl FilesConfig {
-    /// Opens `path` as the sandbox root and resets the read registry.
+    /// Opens `root` as the sandbox root path and resets the read registry.
     ///
     /// Resets the registry so stale read records from a previous root do not
-    /// carry over. Returns `&mut self` for consistency; filesystem tools are
-    /// enabled as soon as this call succeeds.
-    pub fn enable(&mut self, path: impl AsRef<Path>) -> ToolResult<&mut Self> {
-        let root = Dir::open_ambient_dir(&path, ambient_authority())
-            .map_err(|e| map_io_err(&path.as_ref().to_string_lossy(), e))?;
+    /// carry over.
+    pub fn set_root(&mut self, root: impl AsRef<Path>) -> ToolResult<()> {
+        let root = Dir::open_ambient_dir(&root, ambient_authority())
+            .map_err(|e| map_io_err(&root.as_ref().to_string_lossy(), e))?;
         self.root = Some(root);
-        self.read_registry = Arc::new(Mutex::new(HashMap::new()));
-        Ok(self)
-    }
-
-    /// Returns `true` if a sandbox root has been set.
-    pub fn is_enabled(&self) -> bool {
-        self.root.is_some()
-    }
-
-    /// Returns a clone of the root `Dir`, or `Err(PermissionDenied)` if
-    /// filesystem tools are disabled.
-    pub(crate) fn try_clone_root(&self) -> ToolResult<Dir> {
-        self.root
-            .as_ref()
-            .ok_or_else(|| ToolError::PermissionDenied("filesystem access is disabled".into()))?
-            .try_clone()
-            .map_err(ToolError::IoError)
+        self.read_registry = HashMap::new();
+        Ok(())
     }
 }
 
@@ -274,23 +235,28 @@ struct JsReplHandle {
 /// Configuration and handle for the JavaScript tools.
 #[derive(Default)]
 pub struct JsConfig {
-    /// `None` until [`enable`](JsConfig::enable) is called.
-    repl_handle: Option<JsReplHandle>,
+    /// `None` until first use of the JavaScript REPL.
+    //
+    //  TODO: on drop we will need to signal the REPL thread to shut down, but this would require
+    //  support for interrupting Boa, which is not available yet.
+    repl_handle: RwLock<Option<JsReplHandle>>,
 }
 
 impl JsConfig {
-    /// Returns `true` if the JS REPL has been enabled.
-    pub fn is_enabled(&self) -> bool {
-        self.repl_handle.is_some()
-    }
-
-    /// Spawns the dedicated JS context thread and enables the REPL.
-    ///
-    /// Calling `enable` more than once is a no-op; the existing context is reused.
-    pub fn enable(&mut self) -> &mut Self {
-        if self.repl_handle.is_some() {
-            return self;
+    /// Spawns the dedicated JavaScript REPL thread, if not already started. No-op otherwise.
+    fn init_repl_handle(&self) {
+        let handle = self.repl_handle.read().unwrap();
+        if handle.is_some() {
+            return; // Already initialized
         }
+
+        // We need to spawn a new thread. Start by dropping the read lock to acquire a write lock.
+        drop(handle);
+        let mut handle = self.repl_handle.write().unwrap();
+        if handle.is_some() {
+            return; // Someone created the thread in between the drop and re-lock
+        }
+
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsRequest>();
         let thread = std::thread::spawn(move || {
             let mut ctx = crate::js_runtime::JsContext::new();
@@ -302,23 +268,26 @@ impl JsConfig {
                 let _ = reply.send(ctx.eval(&code));
             }
         });
-        self.repl_handle = Some(JsReplHandle {
+        *handle = Some(JsReplHandle {
             tx,
             _thread: thread,
         });
-        self
     }
 
     /// Sends `code` to the JS context thread and awaits the result.
     pub(crate) async fn repl_eval(&self, code: String) -> ToolResult<String> {
-        let tx = self
-            .repl_handle
-            .as_ref()
-            .map(|h| &h.tx)
-            .ok_or_else(|| ToolError::PermissionDenied("JS REPL is disabled".into()))?;
+        self.init_repl_handle();
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-        tx.send((code, reply_tx))
-            .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?;
+
+        // Lock the handle, send the message, and release the lock before awaiting the answer.
+        {
+            let handle = self.repl_handle.read().unwrap();
+            let tx = &handle.as_ref().expect("init_repl_handle guarantees Some").tx;
+            tx.send((code, reply_tx))
+                .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?;
+        }
+
+        // Now that we release the lock we can safely await.
         reply_rx
             .await
             .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?
@@ -329,19 +298,30 @@ impl JsConfig {
 // Sandbox
 // ---------------------------------------------------------------------------
 
+/// The sandbox configuration.
+///
+/// The inner `RwLock` fields use `std::sync::RwLock` (not `tokio::sync::RwLock`). They
+/// may be locked in async code but must never be held across an `.await` point —
+/// that would block the async executor.
 pub struct Sandbox {
-    pub files: FilesConfig,
-    pub http: HttpConfig,
+    pub files: RwLock<FilesConfig>,
+    pub http: RwLock<HttpConfig>,
     pub js: JsConfig,
+    /// File operations are enabled.
+    fs_is_enabled: AtomicBool,
+    /// HTTP operations are enabled.
+    http_is_enabled: AtomicBool,
+    /// JS operations are enabled.
+    js_is_enabled: AtomicBool,
 }
 
 impl Sandbox {
     /// Creates a new `Sandbox` with all tools disabled.
     ///
     /// Activate individual tool groups with:
-    /// - `sandbox.files.enable(path)` — filesystem tools
-    /// - `sandbox.http.enable()` — HTTP fetch tool
-    /// - `sandbox.js.enable()` — JavaScript tools
+    /// - [`Sandbox::enable_fs`] — filesystem tools
+    /// - [`Sandbox::enable_http`] — HTTP fetch tool
+    /// - [`Sandbox::enable_js`] — JavaScript tools
     pub fn new() -> Self {
         static INIT_TLS: std::sync::Once = std::sync::Once::new();
         INIT_TLS.call_once(|| {
@@ -349,11 +329,66 @@ impl Sandbox {
                 .install_default()
                 .expect("failed to install ring crypto provider");
         });
+
         Sandbox {
-            files: FilesConfig::default(),
-            http: HttpConfig::default(),
+            files: RwLock::new(FilesConfig::default()),
+            http: RwLock::new(HttpConfig::default()),
             js: JsConfig::default(),
+            fs_is_enabled: AtomicBool::new(false),
+            http_is_enabled: AtomicBool::new(false),
+            js_is_enabled: AtomicBool::new(false),
         }
+    }
+
+    /// File operations are enabled.
+    pub fn fs_is_enabled(&self) -> bool {
+        self.fs_is_enabled.load(Ordering::Acquire)
+    }
+
+    /// HTTP operations are enabled.
+    pub fn http_is_enabled(&self) -> bool {
+        self.http_is_enabled.load(Ordering::Acquire)
+    }
+
+    /// JavaScript operations are enabled.
+    pub fn js_is_enabled(&self) -> bool {
+        self.js_is_enabled.load(Ordering::Acquire)
+    }
+
+    /// Enables file operation tools and opens `root` as the sandbox root path.
+    ///
+    /// Resets the registry so stale read records from a previous root do not
+    /// carry over.
+    pub fn enable_fs(&self, root: impl AsRef<Path>) -> ToolResult<&Self> {
+        self.files.write().unwrap().set_root(root)?;
+        self.fs_is_enabled.store(true, Ordering::Release);
+        Ok(self)
+    }
+
+    /// Enables HTTP tools.
+    pub fn enable_http(&self) -> &Self {
+        self.http_is_enabled.store(true, Ordering::Release);
+        self
+    }
+
+    /// Enables JavaScript tools.
+    pub fn enable_js(&self) -> &Self {
+        self.js_is_enabled.store(true, Ordering::Release);
+        self
+    }
+
+    /// Sets the `User-Agent` header sent with every request.
+    pub fn set_user_agent(&self, user_agent: impl Into<String>) -> &Self {
+        let mut http_config = self.http.write().unwrap();
+        http_config.user_agent = user_agent.into();
+        self
+    }
+
+    /// Appends a domain rule.
+    pub fn allow(&self, rule: DomainRule) -> &Self {
+        let mut http_config = self.http.write().unwrap();
+        http_config.domain_rules.push(rule);
+        self
     }
 }
 
@@ -392,22 +427,23 @@ mod tests {
     #[test]
     fn best_match_wins() {
         // Rule order is deliberately reversed to confirm it's specificity, not insertion order.
-        let mut config = HttpConfig::default();
-        config
+        let sandbox = Sandbox::new();
+        sandbox
             .allow(DomainRule::new("*", vec![HttpVerb::Get]).unwrap())
             .allow(DomainRule::new("*.example.com", vec![HttpVerb::Post]).unwrap())
             .allow(DomainRule::new("api.example.com", vec![HttpVerb::Delete]).unwrap());
+        let http_config = sandbox.http.read().unwrap();
 
         // Exact match is most specific
-        let verbs = config.allowed_verbs_for("api.example.com").unwrap();
+        let verbs = http_config.allowed_verbs_for("api.example.com").unwrap();
         assert_eq!(verbs, &[HttpVerb::Delete]);
 
         // Subdomain wildcard beats catch-all
-        let verbs = config.allowed_verbs_for("other.example.com").unwrap();
+        let verbs = http_config.allowed_verbs_for("other.example.com").unwrap();
         assert_eq!(verbs, &[HttpVerb::Post]);
 
         // Only catch-all matches
-        let verbs = config.allowed_verbs_for("unrelated.com").unwrap();
+        let verbs = http_config.allowed_verbs_for("unrelated.com").unwrap();
         assert_eq!(verbs, &[HttpVerb::Get]);
     }
 

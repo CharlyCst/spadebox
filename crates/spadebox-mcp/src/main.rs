@@ -121,21 +121,20 @@ async fn main() -> anyhow::Result<()> {
             .exit();
     }
 
-    let mut sandbox = Sandbox::new();
+    let sandbox = Sandbox::new();
 
     if let Some(path) = &cli.files {
         sandbox
-            .files
-            .enable(path)
+            .enable_fs(path)
             .map_err(|e| anyhow::anyhow!("--files {path:?}: {e}"))?;
     }
 
     if cli.js {
-        sandbox.js.enable();
+        sandbox.enable_js();
     }
 
     if !cli.allow.is_empty() {
-        sandbox.http.enable();
+        sandbox.enable_http();
         for rule in &cli.allow {
             let (pattern, verbs) = parse_allow(rule)?;
             let domain_rule = spadebox_core::DomainRule::new(
@@ -149,7 +148,7 @@ async fn main() -> anyhow::Result<()> {
                     .collect::<anyhow::Result<Vec<_>>>()?,
             )
             .map_err(|e| anyhow::anyhow!("--allow {rule:?}: {e}"))?;
-            sandbox.http.allow(domain_rule);
+            sandbox.allow(domain_rule);
         }
     }
 

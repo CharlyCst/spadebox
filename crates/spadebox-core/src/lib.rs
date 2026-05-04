@@ -6,4 +6,5 @@ pub mod tools;
 
 pub use error::{ToolError, ToolResult};
 pub use sandbox::{DomainRule, FilesConfig, HttpConfig, HttpVerb, JsConfig, Sandbox};
+pub use tool_utils::AsArc;
 pub use tools::{Tool, ToolDef, call_tool, enabled_tools};

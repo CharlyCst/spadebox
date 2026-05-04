@@ -26,7 +26,7 @@ use grep_searcher::{Searcher, SearcherBuilder, Sink, SinkContext, SinkContextKin
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
+use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
 use super::{Tool, glob::build_glob_set, glob::walk};
 
@@ -64,7 +64,7 @@ impl Tool for GrepTool {
         Use 'glob' to restrict the search to specific file types (e.g. '**/*.rs'). \
         Use 'context_lines' to include N surrounding lines around each match.";
 
-    async fn run(sandbox: &Sandbox, params: GrepParams) -> ToolResult<String> {
+    async fn run(sandbox: impl AsArc<Sandbox> + Send, params: GrepParams) -> ToolResult<String> {
         // Compile the regex eagerly on the calling thread so we can return a
         // structured error before touching the filesystem.
         let matcher = RegexMatcher::new(&params.pattern)
@@ -74,20 +74,16 @@ impl Tool for GrepTool {
         // This is a pure string → DFA compilation step — no filesystem access.
         let glob_set = build_glob_set(params.glob.as_deref())?;
 
-        // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
-        //
-        // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
-        // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
-        // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox.files.try_clone_root()?;
-
+        let sandbox = sandbox.as_arc();
         let context_lines = params.context_lines as usize;
 
         // Directory walking and grep-searcher are both synchronous. Run them on
         // a dedicated blocking thread to avoid stalling the async executor.
         let output = tokio::task::spawn_blocking(move || {
             let mut lines: Vec<String> = Vec::new();
-            walk(&root, "", &glob_set, &mut |dir, name, display_path| {
+            let fs_config = sandbox.files.read().unwrap();
+            let root = fs_config.root.as_ref().expect("Missing sandbox root");
+            walk(root, "", &glob_set, &mut |dir, name, display_path| {
                 search_file(dir, name, display_path, &matcher, context_lines, &mut lines)
             })?;
             Ok::<String, ToolError>(format_output(&lines))
@@ -241,12 +237,13 @@ mod tests {
     use super::*;
     use crate::Sandbox;
     use std::fs;
+    use std::sync::Arc;
     use tempfile::TempDir;
 
-    fn setup() -> (TempDir, Sandbox) {
+    fn setup() -> (TempDir, Arc<Sandbox>) {
         let dir = TempDir::new().unwrap();
-        let mut sandbox = Sandbox::new();
-        sandbox.files.enable(dir.path()).unwrap();
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
         (dir, sandbox)
     }
 

@@ -2,6 +2,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::{Sandbox, ToolResult};
+use crate::tool_utils::AsArc;
 
 mod edit;
 mod fetch;
@@ -43,7 +44,7 @@ pub trait Tool {
     /// Returns a plain UTF-8 string result suitable for wrapping in any
     /// interface's response type.
     fn run(
-        sandbox: &Sandbox,
+        sandbox: impl AsArc<Sandbox> + Send,
         params: Self::Params,
     ) -> impl Future<Output = ToolResult<String>> + Send;
 
@@ -74,9 +75,9 @@ pub trait Tool {
     /// **protocol error** for the developer. Returns `Ok(ToolResult)` otherwise,
     /// where the inner result carries any **tool-level error** intended for the agent.
     fn call_json(
-        sandbox: &Sandbox,
+        sandbox: impl AsArc<Sandbox> + Send,
         params_json: String,
-    ) -> impl Future<Output = std::result::Result<ToolResult<String>, String>> + Send + '_
+    ) -> impl Future<Output = Result<ToolResult<String>, String>> + Send
     where
         Self: Sized,
     {
@@ -98,18 +99,18 @@ pub struct ToolDef {
 /// Returns metadata for every tool that is currently enabled in `sandbox`.
 pub fn enabled_tools(sandbox: &Sandbox) -> Vec<ToolDef> {
     let mut tools = Vec::new();
-    if sandbox.files.is_enabled() {
+    if sandbox.fs_is_enabled() {
         tools.push(ReadFileTool::def());
         tools.push(WriteFileTool::def());
         tools.push(EditFileTool::def());
+        tools.push(MoveTool::def());
         tools.push(GlobTool::def());
         tools.push(GrepTool::def());
-        tools.push(MoveTool::def());
     }
-    if sandbox.http.is_enabled() {
+    if sandbox.http_is_enabled() {
         tools.push(FetchTool::def());
     }
-    if sandbox.js.is_enabled() {
+    if sandbox.js_is_enabled() {
         tools.push(JsReplTool::def());
     }
     tools
@@ -121,33 +122,34 @@ pub fn enabled_tools(sandbox: &Sandbox) -> Vec<ToolDef> {
 /// - `Ok(Ok(output))` — tool ran successfully.
 /// - `Ok(Err(e))` — tool ran but produced an error intended for the agent.
 pub async fn call_tool(
-    sandbox: &Sandbox,
+    sandbox: impl AsArc<Sandbox> + Send,
     name: &str,
     params_json: String,
-) -> std::result::Result<ToolResult<String>, String> {
+) -> Result<ToolResult<String>, String> {
+    let sandbox = sandbox.as_arc();
     match name {
-        ReadFileTool::NAME if sandbox.files.is_enabled() => {
+        ReadFileTool::NAME if sandbox.fs_is_enabled() => {
             ReadFileTool::call_json(sandbox, params_json).await
         }
-        WriteFileTool::NAME if sandbox.files.is_enabled() => {
+        WriteFileTool::NAME if sandbox.fs_is_enabled() => {
             WriteFileTool::call_json(sandbox, params_json).await
         }
-        EditFileTool::NAME if sandbox.files.is_enabled() => {
+        EditFileTool::NAME if sandbox.fs_is_enabled() => {
             EditFileTool::call_json(sandbox, params_json).await
         }
-        GlobTool::NAME if sandbox.files.is_enabled() => {
+        GlobTool::NAME if sandbox.fs_is_enabled() => {
             GlobTool::call_json(sandbox, params_json).await
         }
-        GrepTool::NAME if sandbox.files.is_enabled() => {
+        GrepTool::NAME if sandbox.fs_is_enabled() => {
             GrepTool::call_json(sandbox, params_json).await
         }
-        MoveTool::NAME if sandbox.files.is_enabled() => {
+        MoveTool::NAME if sandbox.fs_is_enabled() => {
             MoveTool::call_json(sandbox, params_json).await
         }
-        FetchTool::NAME if sandbox.http.is_enabled() => {
+        FetchTool::NAME if sandbox.http_is_enabled() => {
             FetchTool::call_json(sandbox, params_json).await
         }
-        JsReplTool::NAME if sandbox.js.is_enabled() => {
+        JsReplTool::NAME if sandbox.js_is_enabled() => {
             JsReplTool::call_json(sandbox, params_json).await
         }
         name => Err(format!("unknown tool: {name}")),

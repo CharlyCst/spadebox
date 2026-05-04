@@ -4,9 +4,8 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::tool_utils::Registry;
 use crate::tool_utils::{self as fs_utils, deserialize_bool_flexible};
-use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
+use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
 use super::Tool;
 
@@ -45,22 +44,22 @@ impl Tool for MoveTool {
         Set 'create_dirs' to true to create any missing intermediate directories for the destination. \
         To delete instead of moving, omit 'dst' and set 'delete' to true.";
 
-    async fn run(sandbox: &Sandbox, params: MoveParams) -> ToolResult<String> {
-        let root = sandbox.files.try_clone_root()?;
-        let registry = Arc::clone(&sandbox.files.read_registry);
+    async fn run(sandbox: impl AsArc<Sandbox> + Send, params: MoveParams) -> ToolResult<String> {
+        let sandbox = sandbox.as_arc();
 
-        tokio::task::spawn_blocking(move || do_move(root, params, &registry))
+        tokio::task::spawn_blocking(move || do_move(sandbox, params))
             .await
             .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }
 }
 
 fn do_move(
-    root: cap_std::fs::Dir,
+    sandbox: Arc<Sandbox>,
     mut params: MoveParams,
-    registry: &Registry,
 ) -> ToolResult<String> {
     params.src = fs_utils::normalize_path(&params.src).to_string();
+    let mut fs_config = sandbox.files.write().unwrap();
+    let root = fs_config.root.as_ref().expect("Missing sandbox root");
 
     if let Some(dst_raw) = params.dst {
         let dst = fs_utils::normalize_path(&dst_raw).to_string();
@@ -88,7 +87,7 @@ fn do_move(
         root.rename(&params.src, &dst_dir, &dst)
             .map_err(|e| map_io_err(&params.src, e))?;
 
-        fs_utils::move_registry_entry(registry, &params.src, &dst, &dst_dir)?;
+        fs_utils::move_registry_entry(&mut fs_config.read_registry, &params.src, &dst, &dst_dir)?;
 
         Ok(format!("Moved '{}' to '{dst}'", params.src))
     } else {
@@ -111,7 +110,7 @@ fn do_move(
                 .map_err(|e| map_io_err(&params.src, e))?;
         }
 
-        registry.lock().unwrap().remove(&params.src);
+        fs_config.read_registry.remove(&params.src);
 
         Ok(format!("Deleted '{}'", params.src))
     }
@@ -126,14 +125,14 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn setup() -> (TempDir, Sandbox) {
+    fn setup() -> (TempDir, Arc::<Sandbox>) {
         let dir = TempDir::new().unwrap();
-        let mut sandbox = Sandbox::new();
-        sandbox.files.enable(dir.path()).unwrap();
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
         (dir, sandbox)
     }
 
-    async fn read(sandbox: &Sandbox, path: &str) {
+    async fn read(sandbox: impl AsArc<Sandbox> + Send, path: &str) {
         ReadFileTool::run(
             sandbox,
             ReadParams {
@@ -152,7 +151,7 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("a.txt"), "hello").unwrap();
         MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "a.txt".into(),
                 dst: Some("b.txt".into()),
@@ -175,7 +174,7 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("a.txt"), "x").unwrap();
         MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "/a.txt".into(),
                 dst: Some("/b.txt".into()),
@@ -195,7 +194,7 @@ mod tests {
         fs::write(dir.path().join("a.txt"), "a").unwrap();
         fs::write(dir.path().join("b.txt"), "b").unwrap();
         let result = MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "a.txt".into(),
                 dst: Some("b.txt".into()),
@@ -214,7 +213,7 @@ mod tests {
         fs::write(dir.path().join("a.txt"), "a").unwrap();
         fs::write(dir.path().join("b.txt"), "b").unwrap();
         MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "a.txt".into(),
                 dst: Some("b.txt".into()),
@@ -247,7 +246,7 @@ mod tests {
         .unwrap();
         // Should be able to write to dst immediately (registry entry transferred).
         WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "b.txt".into(),
                 content: "world".into(),
@@ -279,7 +278,7 @@ mod tests {
         .await
         .unwrap();
         let result = WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "b.txt".into(),
                 content: "world".into(),
@@ -295,7 +294,7 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("a.txt"), "x").unwrap();
         MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "a.txt".into(),
                 dst: None,
@@ -315,7 +314,7 @@ mod tests {
         fs::create_dir(dir.path().join("mydir")).unwrap();
         fs::write(dir.path().join("mydir/f.txt"), "x").unwrap();
         MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "mydir".into(),
                 dst: None,
@@ -334,7 +333,7 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("a.txt"), "x").unwrap();
         let result = MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "a.txt".into(),
                 dst: None,
@@ -352,7 +351,7 @@ mod tests {
         let (dir, sandbox) = setup();
         fs::write(dir.path().join("a.txt"), "hello").unwrap();
         MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "a.txt".into(),
                 dst: Some("nested/dir/b.txt".into()),
@@ -376,7 +375,7 @@ mod tests {
         // Write a source file using std::fs directly so it pre-exists
         fs::write(_dir.path().join("a.txt"), "hello").unwrap();
         let result = MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "a.txt".into(),
                 dst: Some("missing/b.txt".into()),
@@ -395,7 +394,7 @@ mod tests {
         fs::create_dir(dir.path().join("src_dir")).unwrap();
         fs::write(dir.path().join("src_dir/f.txt"), "content").unwrap();
         MoveTool::run(
-            &sandbox,
+            sandbox,
             MoveParams {
                 src: "src_dir".into(),
                 dst: Some("dst_dir".into()),

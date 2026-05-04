@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
 use serde::Deserialize;
 
@@ -11,14 +11,31 @@ use crate::{ToolError, ToolResult};
 /// Registry mapping relative file paths to the mtime recorded at last read.
 ///
 /// Used to enforce read-before-write and detect external modifications.
-/// The inner `Mutex` is a `std::sync::Mutex` (not `tokio::sync::Mutex`) because it
-/// is only ever locked on blocking threads inside `spawn_blocking`. Never lock it
-/// across an `.await` point — that would block the async executor.
-pub(crate) type Registry = Arc<Mutex<HashMap<String, SystemTime>>>;
+pub(crate) type Registry = HashMap<String, SystemTime>;
 
 /// Default byte cap applied to tool outputs. Large enough for virtually any
 /// source file; small enough to protect the context window.
 pub const DEFAULT_MAX_BYTES: u64 = 20_000;
+
+
+/// A simple trait for Arc ergonomics.
+///
+/// [AsArc] is implemented for both `Arc` and `&Arc`, and enables cloning on demand.
+pub trait AsArc<T> {
+    fn as_arc(self) -> Arc<T>;
+}
+
+impl<T> AsArc<T> for Arc<T> {
+    fn as_arc(self) -> Arc<T> {
+        self // Move
+    }
+}
+
+impl<T> AsArc<T> for &Arc<T> {
+    fn as_arc(self) -> Arc<T> {
+        Arc::clone(self) // Clone
+    }
+}
 
 /// Strip a leading `/` from a path so that sandbox-root-relative paths like
 /// `/src/main.rs` are treated the same as `src/main.rs`.
@@ -84,7 +101,7 @@ pub(crate) fn check_write_allowed(
     path: &str,
     current_mtime: SystemTime,
 ) -> ToolResult<()> {
-    let recorded = registry.lock().unwrap().get(path).copied();
+    let recorded = registry.get(path).copied();
     match recorded {
         None => Err(ToolError::NotRead(path.to_string())),
         Some(recorded) if recorded != current_mtime => {
@@ -101,12 +118,12 @@ pub(crate) fn check_write_allowed(
 ///
 /// # Async safety
 /// Must be called from a `spawn_blocking` closure, never directly in async code.
-pub(crate) fn update_registry(registry: &Registry, path: &str, file: &File) -> ToolResult<()> {
+pub(crate) fn update_registry(registry: &mut Registry, path: &str, file: &File) -> ToolResult<()> {
     let mtime = file
         .metadata()
         .and_then(|m| m.modified())
         .map_err(ToolError::IoError)?;
-    registry.lock().unwrap().insert(path.to_string(), mtime);
+    registry.insert(path.to_string(), mtime);
     Ok(())
 }
 
@@ -120,21 +137,20 @@ pub(crate) fn update_registry(registry: &Registry, path: &str, file: &File) -> T
 /// # Async safety
 /// Must be called from a `spawn_blocking` closure, never directly in async code.
 pub(crate) fn move_registry_entry(
-    registry: &Registry,
+    registry: &mut Registry,
     src: &str,
     dst: &str,
     dst_dir: &Dir,
 ) -> ToolResult<()> {
-    let mut reg = registry.lock().unwrap();
-    let had_src = reg.remove(src).is_some();
+    let had_src = registry.remove(src).is_some();
     if had_src {
         if let Ok(meta) = dst_dir.metadata(dst)
             && let Ok(mtime) = meta.modified()
         {
-            reg.insert(dst.to_string(), mtime);
+            registry.insert(dst.to_string(), mtime);
         }
     } else {
-        reg.remove(dst);
+        registry.remove(dst);
     }
     Ok(())
 }

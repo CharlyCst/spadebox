@@ -4,9 +4,8 @@ use std::sync::Arc;
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err};
+use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
-use crate::tool_utils::Registry;
 use crate::tool_utils::{self as fs_utils, deserialize_bool_flexible};
 
 use super::Tool;
@@ -40,19 +39,13 @@ impl Tool for WriteFileTool {
         To create a directory without writing a file, end the path with '/' (e.g. 'src/utils/') \
         and set 'create_dirs' to true — content is ignored in that case.";
 
-    async fn run(sandbox: &Sandbox, params: WriteParams) -> ToolResult<String> {
-        // Clone the cap-std Dir so ownership can be moved into spawn_blocking.
-        //
-        // SANDBOX: `Dir::try_clone` duplicates the underlying file descriptor.
-        // The cloned Dir carries the same `RESOLVE_BENEATH` constraint as the
-        // original — all cap-std invariants are preserved across the clone.
-        let root = sandbox.files.try_clone_root()?;
-        let registry = Arc::clone(&sandbox.files.read_registry);
+    async fn run(sandbox: impl AsArc<Sandbox> + Send, params: WriteParams) -> ToolResult<String> {
+        let sandbox = sandbox.as_arc();
 
         // All filesystem operations (create_dir_all, create, write_all) are
         // blocking syscalls. Run them on a dedicated thread to avoid stalling
         // the async executor.
-        tokio::task::spawn_blocking(move || do_write(root, params, &registry))
+        tokio::task::spawn_blocking(move || do_write(sandbox, params))
             .await
             .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }
@@ -60,14 +53,11 @@ impl Tool for WriteFileTool {
 
 /// Performs the actual filesystem work on a blocking thread.
 ///
-/// Separated from `run` so the borrow checker is happy with the moved `root`
-/// and `params`, and to keep the logic readable outside the async context.
-fn do_write(
-    root: cap_std::fs::Dir,
-    mut params: WriteParams,
-    registry: &Registry,
-) -> ToolResult<String> {
+/// Separated from `run` to keep the blocking logic readable outside the async context.
+fn do_write(sandbox: Arc<Sandbox>, mut params: WriteParams) -> ToolResult<String> {
     params.path = fs_utils::normalize_path(&params.path).to_string();
+    let mut fs_config = sandbox.files.write().unwrap();
+    let root = fs_config.root.as_ref().expect("Missing sandbox root");
 
     if params.path.ends_with('/') {
         // Path ending with '/' is an explicit request to create a directory.
@@ -95,9 +85,10 @@ fn do_write(
     // external modifications by comparing the stored mtime against the current one.
     if let Ok(metadata) = root.metadata(&params.path) {
         let current_mtime = metadata.modified().map_err(ToolError::IoError)?;
-        fs_utils::check_write_allowed(registry, &params.path, current_mtime)?;
+        fs_utils::check_write_allowed(&mut fs_config.read_registry, &params.path, current_mtime)?;
     }
 
+    let root = fs_config.root.as_mut().expect("Missing sandbox root");
     let mut file = root
         .create(&params.path)
         .map_err(|e| map_io_err(&params.path, e))?;
@@ -105,7 +96,7 @@ fn do_write(
         .map_err(ToolError::IoError)?;
 
     // Update the registry with the new mtime so subsequent writes are allowed.
-    fs_utils::update_registry(registry, &params.path, &file)?;
+    fs_utils::update_registry(&mut fs_config.read_registry, &params.path, &file)?;
 
     Ok(format!(
         "Wrote {} bytes to {}",
@@ -122,10 +113,10 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn setup() -> (TempDir, Sandbox) {
+    fn setup() -> (TempDir, Arc<Sandbox>) {
         let dir = TempDir::new().unwrap();
-        let mut sandbox = Sandbox::new();
-        sandbox.files.enable(dir.path()).unwrap();
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
         (dir, sandbox)
     }
 
@@ -133,7 +124,7 @@ mod tests {
     async fn writes_file() {
         let (dir, sandbox) = setup();
         WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "hello.txt".into(),
                 content: "hello".into(),
@@ -152,7 +143,7 @@ mod tests {
     async fn creates_intermediate_dirs() {
         let (dir, sandbox) = setup();
         WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "a/b/c.txt".into(),
                 content: "deep".into(),
@@ -171,7 +162,7 @@ mod tests {
     async fn leading_slash_is_stripped() {
         let (dir, sandbox) = setup();
         WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "/hello.txt".into(),
                 content: "hello".into(),
@@ -190,7 +181,7 @@ mod tests {
     async fn fails_without_create_dirs_when_parent_missing() {
         let (_dir, sandbox) = setup();
         let result = WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "missing/file.txt".into(),
                 content: "x".into(),
@@ -205,7 +196,7 @@ mod tests {
     async fn creates_directory_from_trailing_slash() {
         let (dir, sandbox) = setup();
         WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "new/nested/dir/".into(),
                 content: String::new(),
@@ -221,7 +212,7 @@ mod tests {
     async fn content_defaults_to_empty() {
         let (dir, sandbox) = setup();
         let params: WriteParams = serde_json::from_str(r#"{"path":"empty.txt"}"#).unwrap();
-        WriteFileTool::run(&sandbox, params).await.unwrap();
+        WriteFileTool::run(sandbox, params).await.unwrap();
         assert_eq!(
             fs::read_to_string(dir.path().join("empty.txt")).unwrap(),
             ""
@@ -234,7 +225,7 @@ mod tests {
         fs::write(dir.path().join("existing.txt"), "content").unwrap();
 
         let result = WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "existing.txt".into(),
                 content: "new content".into(),
@@ -273,7 +264,7 @@ mod tests {
         .unwrap();
 
         let result = WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "f.txt".into(),
                 content: "v2".into(),
@@ -312,7 +303,7 @@ mod tests {
         .await
         .unwrap();
         WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "f.txt".into(),
                 content: "v3".into(),
@@ -342,7 +333,7 @@ mod tests {
         .unwrap();
 
         WriteFileTool::run(
-            &sandbox,
+            sandbox,
             WriteParams {
                 path: "f.txt".into(),
                 content: "v2".into(),
