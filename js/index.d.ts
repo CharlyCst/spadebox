@@ -130,8 +130,9 @@ export declare class SpadeBox {
    * destination path; omit it (pass `null`) when deleting.
    * Set `overwrite` to `true` to replace an existing destination. Set `delete` to `true`
    * (with no `dst`) to delete `src` instead of moving it.
+   * Set `createDirs` to `true` to create any missing intermediate directories for the destination.
    */
-  move(src: string, dst?: string | undefined | null, overwrite?: boolean | undefined | null, del?: boolean | undefined | null): Promise<string>
+  move(src: string, dst?: string | undefined | null, overwrite?: boolean | undefined | null, del?: boolean | undefined | null, createDirs?: boolean | undefined | null): Promise<string>
   /**
    * Replace text within a file. Calls the `edit_file` tool directly.
    *

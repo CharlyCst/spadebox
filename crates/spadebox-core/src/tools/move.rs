@@ -27,6 +27,10 @@ pub struct MoveParams {
     /// Defaults to false.
     #[serde(default, deserialize_with = "deserialize_bool_flexible")]
     pub delete: bool,
+    /// If true, create any missing intermediate directories for the destination path.
+    /// Defaults to false.
+    #[serde(default, deserialize_with = "deserialize_bool_flexible")]
+    pub create_dirs: bool,
 }
 
 pub struct MoveTool;
@@ -38,6 +42,7 @@ impl Tool for MoveTool {
         Provide 'src' (source) and 'dst' (destination) to move or rename. \
         If 'dst' already exists and 'overwrite' is false (default), the call fails — \
         set 'overwrite' to true to replace it. \
+        Set 'create_dirs' to true to create any missing intermediate directories for the destination. \
         To delete instead of moving, omit 'dst' and set 'delete' to true.";
 
     async fn run(sandbox: &Sandbox, params: MoveParams) -> ToolResult<String> {
@@ -65,6 +70,15 @@ fn do_move(
             return Err(ToolError::IoError(io::Error::other(format!(
                 "destination '{dst}' already exists; set overwrite to true to replace it"
             ))));
+        }
+
+        if params.create_dirs {
+            if let Some(parent) = std::path::Path::new(&dst).parent()
+                && parent != std::path::Path::new("")
+            {
+                root.create_dir_all(parent)
+                    .map_err(|e| map_io_err(&parent.to_string_lossy(), e))?;
+            }
         }
 
         // cap_std::Dir::rename takes two Dir handles (from_dir, from, to_dir, to).
@@ -144,6 +158,7 @@ mod tests {
                 dst: Some("b.txt".into()),
                 overwrite: false,
                 delete: false,
+                create_dirs: false,
             },
         )
         .await
@@ -166,6 +181,7 @@ mod tests {
                 dst: Some("/b.txt".into()),
                 overwrite: false,
                 delete: false,
+                create_dirs: false,
             },
         )
         .await
@@ -185,6 +201,7 @@ mod tests {
                 dst: Some("b.txt".into()),
                 overwrite: false,
                 delete: false,
+                create_dirs: false,
             },
         )
         .await;
@@ -203,6 +220,7 @@ mod tests {
                 dst: Some("b.txt".into()),
                 overwrite: true,
                 delete: false,
+                create_dirs: false,
             },
         )
         .await
@@ -222,6 +240,7 @@ mod tests {
                 dst: Some("b.txt".into()),
                 overwrite: false,
                 delete: false,
+                create_dirs: false,
             },
         )
         .await
@@ -254,6 +273,7 @@ mod tests {
                 dst: Some("b.txt".into()),
                 overwrite: false,
                 delete: false,
+                create_dirs: false,
             },
         )
         .await
@@ -281,6 +301,7 @@ mod tests {
                 dst: None,
                 overwrite: false,
                 delete: true,
+                create_dirs: false,
             },
         )
         .await
@@ -300,6 +321,7 @@ mod tests {
                 dst: None,
                 overwrite: false,
                 delete: true,
+                create_dirs: false,
             },
         )
         .await
@@ -318,6 +340,49 @@ mod tests {
                 dst: None,
                 overwrite: false,
                 delete: false,
+                create_dirs: false,
+            },
+        )
+        .await;
+        assert!(result.is_err());
+    }
+
+    #[tokio::test]
+    async fn create_dirs_makes_missing_parents() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("a.txt"), "hello").unwrap();
+        MoveTool::run(
+            &sandbox,
+            MoveParams {
+                src: "a.txt".into(),
+                dst: Some("nested/dir/b.txt".into()),
+                overwrite: false,
+                delete: false,
+                create_dirs: true,
+            },
+        )
+        .await
+        .unwrap();
+        assert!(!dir.path().join("a.txt").exists());
+        assert_eq!(
+            fs::read_to_string(dir.path().join("nested/dir/b.txt")).unwrap(),
+            "hello"
+        );
+    }
+
+    #[tokio::test]
+    async fn fails_when_dst_parent_missing_and_no_create_dirs() {
+        let (_dir, sandbox) = setup();
+        // Write a source file using std::fs directly so it pre-exists
+        fs::write(_dir.path().join("a.txt"), "hello").unwrap();
+        let result = MoveTool::run(
+            &sandbox,
+            MoveParams {
+                src: "a.txt".into(),
+                dst: Some("missing/b.txt".into()),
+                overwrite: false,
+                delete: false,
+                create_dirs: false,
             },
         )
         .await;
@@ -336,6 +401,7 @@ mod tests {
                 dst: Some("dst_dir".into()),
                 overwrite: false,
                 delete: false,
+                create_dirs: false,
             },
         )
         .await

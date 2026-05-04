@@ -313,6 +313,7 @@ impl SpadeBox {
   /// destination path; omit it (pass `null`) when deleting.
   /// Set `overwrite` to `true` to replace an existing destination. Set `delete` to `true`
   /// (with no `dst`) to delete `src` instead of moving it.
+  /// Set `createDirs` to `true` to create any missing intermediate directories for the destination.
   #[napi(js_name = "move")]
   pub async fn mv(
     &self,
@@ -320,6 +321,7 @@ impl SpadeBox {
     dst: Option<String>,
     overwrite: Option<bool>,
     del: Option<bool>,
+    create_dirs: Option<bool>,
   ) -> napi::Result<String> {
     MoveTool::run(
       &self.inner,
@@ -328,6 +330,7 @@ impl SpadeBox {
         dst,
         overwrite: overwrite.unwrap_or(false),
         delete: del.unwrap_or(false),
+        create_dirs: create_dirs.unwrap_or(false),
       },
     )
     .await

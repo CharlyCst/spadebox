@@ -4,6 +4,7 @@
       "type": "stdio",
       "command": "./target/debug/spadebox-mcp",
       "args": [
+        "--files",
         "./sandbox-test"
       ],
       "env": {}
