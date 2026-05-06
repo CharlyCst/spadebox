@@ -55,11 +55,11 @@ const result = await sb.callTool("read_file", JSON.stringify({ path: "src/main.r
 use spadebox_core::{Sandbox, DomainRule, HttpVerb, enabled_tools, call_tool};
 
 let mut sandbox = Sandbox::new();
-sandbox.files.enable("/workspace")?;
-sandbox.http
-    .enable()
-    .allow(DomainRule::new("api.example.com", vec![HttpVerb::Get, HttpVerb::Post])?);
-sandbox.js.enable();
+sandbox
+    .enable_fs("/workspace")?
+    .enable_http()
+    .allow(DomainRule::new("api.example.com", vec![HttpVerb::Get, HttpVerb::Post])?)
+    .enable_js();
 
 let tools = enabled_tools(&sandbox); // pass to your LLM as available tools
 
