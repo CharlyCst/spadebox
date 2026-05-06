@@ -12,9 +12,9 @@ use cap_std::fs::OpenOptions;
 use crate::Sandbox;
 use super::SandboxCaptures;
 
-/// Registers the `fs` global object with Node-compatible synchronous file APIs.
-pub(super) fn register(ctx: &mut Context, sandbox: Arc<Sandbox>) {
-    let fs = ObjectInitializer::new(ctx)
+/// Builds the `fs` object with Node-compatible synchronous file APIs.
+pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_engine::JsObject {
+    ObjectInitializer::new(ctx)
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 read_file_sync,
@@ -83,8 +83,12 @@ pub(super) fn register(ctx: &mut Context, sandbox: Arc<Sandbox>) {
             js_string!("statSync"),
             1,
         )
-        .build();
+        .build()
+}
 
+/// Registers the `fs` global object with Node-compatible synchronous file APIs.
+pub(super) fn register(ctx: &mut Context, sandbox: Arc<Sandbox>) {
+    let fs = build_fs_object(ctx, sandbox);
     ctx.register_global_property(
         js_string!("fs"),
         fs,

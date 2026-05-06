@@ -1,10 +1,11 @@
-use std::sync::Arc;
+use std::{rc::Rc, sync::Arc};
 
 use boa_engine::{Context, Source};
 
 use crate::{Sandbox, ToolError, ToolResult};
 
 mod files;
+mod loader;
 
 /// A JavaScript execution context with a persistent session.
 ///
@@ -23,8 +24,17 @@ pub struct JsContext {
 impl JsContext {
     /// Creates a new `JsContext` with all runtime APIs registered.
     pub fn new(sandbox: Arc<Sandbox>) -> Self {
-        let mut ctx = Context::default();
+        let mut ctx = Context::builder()
+            .module_loader(Rc::new(loader::SpadeboxModuleLoader {
+                sandbox: Arc::clone(&sandbox),
+            }))
+            .build()
+            .expect("failed to build JS context");
+
+        // Inject runtime functions and objects
         files::register(&mut ctx, Arc::clone(&sandbox));
+        loader::register_require(&mut ctx, Arc::clone(&sandbox));
+
         Self { ctx, sandbox }
     }
 
@@ -54,3 +64,4 @@ unsafe impl boa_engine::gc::Trace for SandboxCaptures {
         boa_engine::gc::Finalize::finalize(self);
     }
 }
+
