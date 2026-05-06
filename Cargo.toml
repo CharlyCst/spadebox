@@ -16,3 +16,6 @@ schemars = "1"
 [profile.release]
 lto = true
 strip = "symbols"
+
+[workspace.lints.clippy]
+get_first = "allow"

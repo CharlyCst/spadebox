@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::RwLock;
+use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::tool_utils::Registry;
@@ -244,7 +244,7 @@ pub struct JsConfig {
 
 impl JsConfig {
     /// Spawns the dedicated JavaScript REPL thread, if not already started. No-op otherwise.
-    fn init_repl_handle(&self) {
+    fn init_repl_handle(&self, sandbox: Arc<Sandbox>) {
         let handle = self.repl_handle.read().unwrap();
         if handle.is_some() {
             return; // Already initialized
@@ -259,7 +259,7 @@ impl JsConfig {
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsRequest>();
         let thread = std::thread::spawn(move || {
-            let mut ctx = crate::js_runtime::JsContext::new();
+            let mut ctx = crate::js_runtime::JsContext::new(sandbox);
             // `blocking_recv` parks this thread until a request arrives, then
             // evaluates it synchronously. Loop exits when all senders are dropped
             // (i.e., when `JsConfig` is dropped), cleanly destroying the context.
@@ -275,8 +275,8 @@ impl JsConfig {
     }
 
     /// Sends `code` to the JS context thread and awaits the result.
-    pub(crate) async fn repl_eval(&self, code: String) -> ToolResult<String> {
-        self.init_repl_handle();
+    pub(crate) async fn repl_eval(&self, sandbox: Arc<Sandbox>, code: String) -> ToolResult<String> {
+        self.init_repl_handle(sandbox);
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
 
         // Lock the handle, send the message, and release the lock before awaiting the answer.

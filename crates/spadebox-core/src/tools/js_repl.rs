@@ -1,7 +1,9 @@
+use std::sync::Arc;
+
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{Sandbox, ToolResult, AsArc};
+use crate::{AsArc, Sandbox, ToolResult};
 
 use super::Tool;
 
@@ -33,7 +35,7 @@ impl Tool for JsReplTool {
                 "JS REPL is disabled".to_string(),
             ));
         }
-        sandbox.js.repl_eval(params.code).await
+        sandbox.js.repl_eval(Arc::clone(&sandbox), params.code).await
     }
 }
 
@@ -92,6 +94,63 @@ mod tests {
         .unwrap_err();
         let msg = err.to_string();
         assert!(msg.contains("JS error"), "unexpected error: {msg}");
+    }
+
+    #[tokio::test]
+    async fn read_file_sync() {
+        let dir = tempfile::TempDir::new().unwrap();
+        std::fs::write(dir.path().join("hello.txt"), "hello world").unwrap();
+
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
+        sandbox.enable_js();
+
+        let result = JsReplTool::run(
+            &sandbox,
+            JsReplParams {
+                code: r#"fs.readFileSync("hello.txt")"#.into(),
+            },
+        )
+        .await
+        .unwrap();
+        assert_eq!(result, "\"hello world\"");
+    }
+
+    #[tokio::test]
+    async fn write_file_sync() {
+        let dir = tempfile::TempDir::new().unwrap();
+
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
+        sandbox.enable_js();
+
+        JsReplTool::run(
+            &sandbox,
+            JsReplParams {
+                code: r#"fs.writeFileSync("out.txt", "from js")"#.into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let content = std::fs::read_to_string(dir.path().join("out.txt")).unwrap();
+        assert_eq!(content, "from js");
+    }
+
+    #[tokio::test]
+    async fn fs_access_denied_without_enable_fs() {
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_js();
+
+        let err = JsReplTool::run(
+            &sandbox,
+            JsReplParams {
+                code: r#"fs.readFileSync("x.txt")"#.into(),
+            },
+        )
+        .await
+        .unwrap_err();
+        assert!(matches!(err, crate::ToolError::JsError(_)));
     }
 
     #[tokio::test]
