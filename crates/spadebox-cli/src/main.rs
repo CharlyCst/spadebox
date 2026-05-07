@@ -2,7 +2,7 @@ use std::env;
 use std::sync::Arc;
 
 use anyhow::Context;
-use spadebox_core::{DomainRule, HttpVerb, Sandbox, enabled_tools};
+use spadebox_core::{DomainRule, HttpVerb, Sandbox, ToolDef, enabled_tools};
 
 /// Spadebox CLI — run spadebox tools from the command line.
 ///
@@ -35,6 +35,14 @@ enum Command {
 enum ToolsAction {
     /// List all available tools
     List,
+    /// Show detailed information about a tool
+    Info {
+        /// Name of the tool
+        tool_name: String,
+        /// Output in Markdown format
+        #[arg(long)]
+        markdown: bool,
+    },
 }
 
 fn build_sandbox() -> anyhow::Result<Arc<Sandbox>> {
@@ -65,6 +73,100 @@ fn build_sandbox() -> anyhow::Result<Arc<Sandbox>> {
     Ok(Arc::new(sandbox))
 }
 
+/// Extracts the primary type name from a JSON Schema type value.
+///
+/// Handles both `"type": "string"` and `"type": ["integer", "null"]` (nullable
+/// fields produced by schemars for `Option<T>`).
+fn type_name(type_val: &serde_json::Value) -> &str {
+    match type_val {
+        serde_json::Value::String(s) => s.as_str(),
+        serde_json::Value::Array(arr) => arr
+            .iter()
+            .find_map(|v| {
+                let s = v.as_str()?;
+                (s != "null").then_some(s)
+            })
+            .unwrap_or("unknown"),
+        _ => "unknown",
+    }
+}
+
+fn print_tool_info(tool: &ToolDef, markdown: bool) {
+    let schema = &tool.schema;
+    let empty_map = serde_json::Map::new();
+    let properties = schema
+        .get("properties")
+        .and_then(|v| v.as_object())
+        .unwrap_or(&empty_map);
+    let required: std::collections::HashSet<&str> = schema
+        .get("required")
+        .and_then(|v| v.as_array())
+        .map(|arr| arr.iter().filter_map(|v| v.as_str()).collect())
+        .unwrap_or_default();
+    let schema_str = serde_json::to_string_pretty(schema).unwrap_or_default();
+
+    if markdown {
+        println!("## Tool: {}", tool.name);
+        println!();
+        println!("{}", tool.description);
+        println!();
+
+        if !properties.is_empty() {
+            println!("### Arguments");
+            println!();
+            for (name, prop) in properties {
+                let ty = prop.get("type").map(type_name).unwrap_or("unknown");
+                let req = if required.contains(name.as_str()) {
+                    "required"
+                } else {
+                    "optional"
+                };
+                println!("**`{name}`** ({ty}, {req})");
+                println!();
+                if let Some(desc) = prop.get("description").and_then(|v| v.as_str()) {
+                    println!("{desc}");
+                    println!();
+                }
+            }
+        }
+
+        println!("### Schema");
+        println!();
+        println!("```json");
+        println!("{schema_str}");
+        println!("```");
+    } else {
+        println!("Tool: {}", tool.name);
+        println!();
+        println!("{}", tool.description);
+        println!();
+
+        if !properties.is_empty() {
+            println!("Arguments:");
+            for (name, prop) in properties {
+                let ty = prop.get("type").map(type_name).unwrap_or("unknown");
+                let req = if required.contains(name.as_str()) {
+                    "required"
+                } else {
+                    "optional"
+                };
+                println!("  {name} ({ty}, {req})");
+                if let Some(desc) = prop.get("description").and_then(|v| v.as_str()) {
+                    for line in desc.lines() {
+                        println!("    {line}");
+                    }
+                }
+                println!();
+            }
+        }
+
+        println!("Schema:");
+        for line in schema_str.lines() {
+            println!("  {line}");
+        }
+    }
+}
+
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     use clap::Parser;
@@ -80,6 +182,15 @@ async fn main() -> anyhow::Result<()> {
             for tool in tools {
                 println!("{}\n  {}\n", tool.name, tool.description);
             }
+        }
+        Command::Tools {
+            action: ToolsAction::Info { tool_name, markdown },
+        } => {
+            let tool = enabled_tools(&sandbox)
+                .into_iter()
+                .find(|t| t.name == tool_name)
+                .with_context(|| format!("unknown tool: {tool_name}"))?;
+            print_tool_info(&tool, markdown);
         }
         Command::Run {
             tool_name,
