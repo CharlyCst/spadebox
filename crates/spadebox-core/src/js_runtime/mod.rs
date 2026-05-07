@@ -1,11 +1,21 @@
-use std::{rc::Rc, sync::Arc};
+use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use boa_engine::{Context, Source};
 
 use crate::{Sandbox, ToolError, ToolResult};
 
+mod console;
 mod files;
 mod loader;
+
+/// Output from a JavaScript evaluation: the expression value plus any captured console lines.
+#[derive(Debug)]
+pub(crate) struct JsOutput {
+    /// String representation of the last evaluated expression.
+    pub value: String,
+    /// Lines emitted via `console.log`, `console.warn`, etc., in order.
+    pub console: Vec<String>,
+}
 
 /// A JavaScript execution context with a persistent session.
 ///
@@ -17,6 +27,7 @@ mod loader;
 /// interact with Boa types directly.
 pub struct JsContext {
     ctx: Context,
+    console_output: Rc<RefCell<Vec<String>>>,
     #[allow(dead_code)]
     sandbox: Arc<Sandbox>,
 }
@@ -34,15 +45,17 @@ impl JsContext {
         // Inject runtime functions and objects
         files::register(&mut ctx, Arc::clone(&sandbox));
         loader::register_require(&mut ctx, Arc::clone(&sandbox));
+        let console_output = console::register(&mut ctx);
 
-        Self { ctx, sandbox }
+        Self { ctx, console_output, sandbox }
     }
 
-    /// Evaluates `code` and returns the result as a string.
-    pub fn eval(&mut self, code: &str) -> ToolResult<String> {
-        self.ctx
-            .eval(Source::from_bytes(code.as_bytes()))
-            .map(|v| v.display().to_string())
+    /// Evaluates `code` and returns the result along with any captured console output.
+    pub fn eval(&mut self, code: &str) -> ToolResult<JsOutput> {
+        let result = self.ctx.eval(Source::from_bytes(code.as_bytes()));
+        let console = self.console_output.borrow_mut().drain(..).collect();
+        result
+            .map(|v| JsOutput { value: v.display().to_string(), console })
             .map_err(|e| ToolError::JsError(e.to_string()))
     }
 }
@@ -64,4 +77,3 @@ unsafe impl boa_engine::gc::Trace for SandboxCaptures {
         boa_engine::gc::Finalize::finalize(self);
     }
 }
-

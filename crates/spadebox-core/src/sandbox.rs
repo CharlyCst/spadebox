@@ -211,7 +211,7 @@ impl FilesConfig {
 
 /// A request sent to the dedicated JS context thread: source code to evaluate
 /// and a one-shot reply channel to return the result on.
-type JsRequest = (String, tokio::sync::oneshot::Sender<ToolResult<String>>);
+type JsRequest = (String, tokio::sync::oneshot::Sender<ToolResult<crate::js_runtime::JsOutput>>);
 
 /// Live handle to the dedicated JS REPL thread.
 ///
@@ -276,7 +276,7 @@ impl JsConfig {
     }
 
     /// Sends `code` to the JS context thread and awaits the result.
-    pub(crate) async fn repl_eval(&self, sandbox: Arc<Sandbox>, code: String) -> ToolResult<String> {
+    pub(crate) async fn repl_eval(&self, sandbox: Arc<Sandbox>, code: String) -> ToolResult<crate::js_runtime::JsOutput> {
         self.init_repl_handle(sandbox);
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
 

@@ -52,7 +52,7 @@ impl Tool for JsExecTool {
             file.read_to_string(&mut code).map_err(ToolError::IoError)?;
 
             let mut ctx = JsContext::new(sandbox);
-            ctx.eval(&code).map(|_| String::new())
+            ctx.eval(&code).map(|output| output.console.join("\n"))
         })
         .await
         .map_err(|e| ToolError::JsError(e.to_string()))?

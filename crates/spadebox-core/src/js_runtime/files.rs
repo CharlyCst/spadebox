@@ -341,7 +341,7 @@ mod tests {
     }
 
     fn eval(ctx: &mut JsContext, code: &str) -> String {
-        ctx.eval(code).unwrap()
+        ctx.eval(code).unwrap().value
     }
 
     fn eval_err(ctx: &mut JsContext, code: &str) -> String {

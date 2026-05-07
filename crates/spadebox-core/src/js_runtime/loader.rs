@@ -119,11 +119,11 @@ mod tests {
         // require('fs') returns an object with all fs functions
         ctx.eval(r#"const fs = require('fs')"#).unwrap();
         ctx.eval(r#"fs.writeFileSync("a.txt", "hi")"#).unwrap();
-        assert_eq!(ctx.eval(r#"fs.readFileSync("a.txt")"#).unwrap(), r#""hi""#);
+        assert_eq!(ctx.eval(r#"fs.readFileSync("a.txt")"#).unwrap().value, r#""hi""#);
         // node:fs prefix and destructuring work too
         ctx.eval(r#"const { readFileSync, writeFileSync } = require('node:fs')"#).unwrap();
         ctx.eval(r#"writeFileSync("b.txt", "hello")"#).unwrap();
-        assert_eq!(ctx.eval(r#"readFileSync("b.txt")"#).unwrap(), r#""hello""#);
+        assert_eq!(ctx.eval(r#"readFileSync("b.txt")"#).unwrap().value, r#""hello""#);
         // unknown modules throw
         assert!(ctx.eval(r#"require('os')"#).unwrap_err().to_string().contains("JS error"));
     }
