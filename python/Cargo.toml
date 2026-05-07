@@ -1,0 +1,16 @@
+[package]
+authors = ["Charly Castes <charly.castes@epfl.ch>"]
+edition = "2024"
+name = "spadebox-python"
+version = "0.1.0"
+publish = false
+
+[lib]
+name = "spadebox"
+crate-type = ["cdylib"]
+
+[dependencies]
+pyo3 = { version = "0.28", features = ["extension-module"] }
+serde_json = { workspace = true }
+spadebox-core = { path = "../crates/spadebox-core" }
+tokio = { workspace = true }

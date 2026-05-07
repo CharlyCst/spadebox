@@ -1,0 +1,19 @@
+[build-system]
+requires = ["maturin>=1.7,<2.0"]
+build-backend = "maturin"
+
+[project]
+name = "spadebox"
+version = "0.1.0"
+description = "Python bindings for SpadeBox — sandboxed tools for AI agents"
+requires-python = ">=3.9"
+
+[tool.maturin]
+module-name = "spadebox"
+features = ["pyo3/extension-module"]
+
+[tool.uv]
+dev-dependencies = [
+    "maturin>=1.13.1",
+    "pytest",
+]

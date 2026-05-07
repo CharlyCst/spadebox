@@ -21,6 +21,5 @@ coverage/
 /js/npm
 /js/dist
 
-# Yarn Berry
-/js/.yarn/*
-/js/.pnp.*
+# Python
+__pycache__/

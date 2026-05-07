@@ -4,6 +4,7 @@ members = [
     "crates/spadebox-mcp",
     "crates/spadebox-cli",
     "js",
+    "python",
 ]
 resolver = "2"
 
