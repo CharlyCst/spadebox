@@ -4,7 +4,7 @@ use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
 
 use crate::tool_utils::Registry;
-use crate::{ToolError, ToolResult};
+use crate::{ToolError, ToolResult, AsArc};
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
@@ -244,7 +244,8 @@ pub struct JsConfig {
 
 impl JsConfig {
     /// Spawns the dedicated JavaScript REPL thread, if not already started. No-op otherwise.
-    fn init_repl_handle(&self, sandbox: Arc<Sandbox>) {
+    fn init_repl_handle(&self, sandbox: impl AsArc<Sandbox>) {
+        let sandbox = sandbox.as_arc();
         let handle = self.repl_handle.read().unwrap();
         if handle.is_some() {
             return; // Already initialized
@@ -292,6 +293,7 @@ impl JsConfig {
             .await
             .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?
     }
+
 }
 
 // ---------------------------------------------------------------------------

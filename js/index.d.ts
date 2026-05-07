@@ -124,7 +124,16 @@ export declare class SpadeBox {
    */
   jsRepl(code: string): Promise<string>
   /**
-   * Move or rename a file or directory, or delete it. Calls the `move` tool directly.
+   * Execute a JavaScript file in a fresh runtime.
+   *
+   * `path` must be relative to the sandbox root (e.g. `'scripts/setup.js'`).
+   * Each call starts from a clean context — no state is shared with the JS REPL
+   * or other `jsExec` calls. Requires both `enableJs` and `enableFiles`.
+   * Returns an empty string on success, or throws if the script throws.
+   */
+  jsExec(path: string): Promise<string>
+  /**
+   * Move or rename a file or directory, or delete it.
    *
    * `src` is the source path relative to the sandbox root. `dst` is the
    * destination path; omit it (pass `null`) when deleting.
@@ -134,7 +143,7 @@ export declare class SpadeBox {
    */
   move(src: string, dst?: string | undefined | null, overwrite?: boolean | undefined | null, del?: boolean | undefined | null, createDirs?: boolean | undefined | null): Promise<string>
   /**
-   * Replace text within a file. Calls the `edit_file` tool directly.
+   * Replace text within a file.
    *
    * Finds the exact string `oldString` in the file at `path` and replaces it
    * with `newString`. By default `oldString` must appear exactly once —

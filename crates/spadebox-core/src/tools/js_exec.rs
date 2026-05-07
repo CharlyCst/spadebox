@@ -1,0 +1,165 @@
+use std::io::Read;
+
+use schemars::JsonSchema;
+use serde::Deserialize;
+
+use crate::js_runtime::JsContext;
+use crate::tool_utils as fs_utils;
+use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::map_io_err};
+
+use super::Tool;
+
+pub struct JsExecTool;
+
+#[derive(Debug, Deserialize, JsonSchema)]
+pub struct JsExecParams {
+    /// Path to the JavaScript file to execute, relative to the sandbox root.
+    pub path: String,
+}
+
+impl Tool for JsExecTool {
+    type Params = JsExecParams;
+
+    const NAME: &'static str = "js_exec";
+
+    const DESCRIPTION: &'static str = "Execute a JavaScript file in a fresh runtime and return \
+         an empty string on success, or an error message if the script throws. \
+         No state is shared with the JS REPL — each call starts from a clean context.";
+
+    async fn run(sandbox: impl AsArc<Sandbox> + Send, params: Self::Params) -> ToolResult<String> {
+        let sandbox = sandbox.as_arc();
+        if !sandbox.js_is_enabled() {
+            return Err(ToolError::PermissionDenied("JS is disabled".to_string()));
+        }
+        if !sandbox.fs_is_enabled() {
+            return Err(ToolError::PermissionDenied(
+                "file system is disabled".to_string(),
+            ));
+        }
+
+        tokio::task::spawn_blocking(move || {
+            let path = fs_utils::normalize_path(&params.path).to_string();
+            let mut file = {
+                let fs_config = sandbox.files.read().unwrap();
+                fs_config
+                    .root
+                    .as_ref()
+                    .expect("Missing sandbox root")
+                    .open(&path)
+                    .map_err(|e| map_io_err(&path, e))?
+            };
+            let mut code = String::new();
+            file.read_to_string(&mut code).map_err(ToolError::IoError)?;
+
+            let mut ctx = JsContext::new(sandbox);
+            ctx.eval(&code).map(|_| String::new())
+        })
+        .await
+        .map_err(|e| ToolError::JsError(e.to_string()))?
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::Arc;
+
+    fn setup() -> (tempfile::TempDir, Arc<Sandbox>) {
+        let dir = tempfile::TempDir::new().unwrap();
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
+        sandbox.enable_js();
+        (dir, sandbox)
+    }
+
+    #[tokio::test]
+    async fn executes_file_successfully() {
+        let (dir, sandbox) = setup();
+        std::fs::write(dir.path().join("script.js"), "1 + 1").unwrap();
+
+        let result = JsExecTool::run(&sandbox, JsExecParams { path: "script.js".into() })
+            .await
+            .unwrap();
+        assert_eq!(result, "");
+    }
+
+    #[tokio::test]
+    async fn js_error_is_surfaced() {
+        let (dir, sandbox) = setup();
+        std::fs::write(dir.path().join("err.js"), "throw new Error('boom')").unwrap();
+
+        let err = JsExecTool::run(&sandbox, JsExecParams { path: "err.js".into() })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::JsError(_)));
+    }
+
+    #[tokio::test]
+    async fn missing_file_returns_error() {
+        let (_dir, sandbox) = setup();
+
+        let err = JsExecTool::run(&sandbox, JsExecParams { path: "nope.js".into() })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::NotFound(_)));
+    }
+
+    #[tokio::test]
+    async fn runtime_is_fresh_per_call() {
+        let (dir, sandbox) = setup();
+        // Define a variable in the first call — it must not bleed into the second.
+        std::fs::write(dir.path().join("a.js"), "var x = 42;").unwrap();
+        std::fs::write(
+            dir.path().join("b.js"),
+            "if (typeof x !== 'undefined') throw new Error('leaked');",
+        )
+        .unwrap();
+
+        JsExecTool::run(&sandbox, JsExecParams { path: "a.js".into() })
+            .await
+            .unwrap();
+        JsExecTool::run(&sandbox, JsExecParams { path: "b.js".into() })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn fs_accessible_from_script() {
+        let (dir, sandbox) = setup();
+        std::fs::write(dir.path().join("data.txt"), "hello").unwrap();
+        std::fs::write(
+            dir.path().join("read.js"),
+            r#"var s = fs.readFileSync("data.txt"); if (s !== "hello") throw new Error(s);"#,
+        )
+        .unwrap();
+
+        JsExecTool::run(&sandbox, JsExecParams { path: "read.js".into() })
+            .await
+            .unwrap();
+    }
+
+    #[tokio::test]
+    async fn disabled_js_returns_permission_error() {
+        let dir = tempfile::TempDir::new().unwrap();
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_fs(dir.path()).unwrap();
+        // JS not enabled
+
+        let err = JsExecTool::run(&sandbox, JsExecParams { path: "x.js".into() })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::PermissionDenied(_)));
+    }
+
+    #[tokio::test]
+    async fn disabled_fs_returns_permission_error() {
+        let sandbox = Arc::new(Sandbox::new());
+        sandbox.enable_js();
+        // FS not enabled
+
+        let err = JsExecTool::run(&sandbox, JsExecParams { path: "x.js".into() })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::PermissionDenied(_)));
+    }
+}

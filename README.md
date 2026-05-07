@@ -26,6 +26,7 @@ Currently, Spadebox includes the following tools:
 - `glob`
 - `fetch`
 - `js_repl`
+- `js_exec`
 
 Spadebox uses the [`cap-std` crate](https://github.com/bytecodealliance/cap-std) for file system sandboxing, and domain whitelisting for HTTP requests.
 The JS engine is based on  [boa](https://boajs.dev/), and use the same sandboxing policies.
