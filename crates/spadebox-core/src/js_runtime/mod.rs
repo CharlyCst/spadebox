@@ -5,6 +5,7 @@ use boa_engine::{Context, Source};
 use crate::{Sandbox, ToolError, ToolResult};
 
 mod console;
+mod fetch;
 mod files;
 mod loader;
 
@@ -44,19 +45,35 @@ impl JsContext {
 
         // Inject runtime functions and objects
         files::register(&mut ctx, Arc::clone(&sandbox));
+        fetch::register(&mut ctx, Arc::clone(&sandbox));
         loader::register_require(&mut ctx, Arc::clone(&sandbox));
         let console_output = console::register(&mut ctx);
 
-        Self { ctx, console_output, sandbox }
+        Self {
+            ctx,
+            console_output,
+            sandbox,
+        }
     }
 
     /// Evaluates `code` and returns the result along with any captured console output.
+    ///
+    /// After evaluation, the job queue is drained so that Promises and `async/await`
+    /// settle before returning. Eval errors take priority over job errors.
     pub fn eval(&mut self, code: &str) -> ToolResult<JsOutput> {
-        let result = self.ctx.eval(Source::from_bytes(code.as_bytes()));
+        let eval_result = self.ctx.eval(Source::from_bytes(code.as_bytes()));
+        // Always drain the job queue — even on eval error, pending microtasks
+        // should be flushed to keep the context in a consistent state.
+        let job_result = self.ctx.run_jobs();
         let console = self.console_output.borrow_mut().drain(..).collect();
-        result
-            .map(|v| JsOutput { value: v.display().to_string(), console })
-            .map_err(|e| ToolError::JsError(e.to_string()))
+
+        let value = eval_result.map_err(|e| ToolError::JsError(e.to_string()))?;
+        job_result.map_err(|e| ToolError::JsError(e.to_string()))?;
+
+        Ok(JsOutput {
+            value: value.display().to_string(),
+            console,
+        })
     }
 }
 
@@ -71,9 +88,54 @@ impl boa_engine::gc::Finalize for SandboxCaptures {}
 
 // SAFETY: `Arc<Sandbox>` holds no GC-managed objects; nothing to trace.
 unsafe impl boa_engine::gc::Trace for SandboxCaptures {
-    unsafe fn trace(&self, _tracer: &mut boa_engine::gc::Tracer) {}
-    unsafe fn trace_non_roots(&self) {}
-    fn run_finalizer(&self) {
-        boa_engine::gc::Finalize::finalize(self);
+    boa_engine::gc::empty_trace!();
+}
+
+// ---------------------------------------------------------------------------
+// Tests
+// ---------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::JsContext;
+    use crate::Sandbox;
+    use std::sync::Arc;
+
+    fn ctx() -> JsContext {
+        JsContext::new(Arc::new(Sandbox::new()))
+    }
+
+    #[test]
+    fn jobs() {
+        let mut ctx = ctx();
+
+        // Promise .then() callbacks are settled before eval() returns.
+        ctx.eval("let x = 0; Promise.resolve(1).then(v => { x = v; });")
+            .unwrap();
+        assert_eq!(ctx.eval("x").unwrap().value, "1", ".then callback ran");
+
+        // async/await inside an IIFE resolves through the job queue.
+        ctx.eval(
+            r#"
+            let y;
+            (async () => { y = await Promise.resolve("done"); })();
+        "#,
+        )
+        .unwrap();
+        assert_eq!(
+            ctx.eval("y").unwrap().value,
+            r#""done""#,
+            "async/await settled"
+        );
+
+        // console.log inside an async callback is captured.
+        let out = ctx
+            .eval(r#"(async () => { console.log("async log"); })();"#)
+            .unwrap();
+        assert_eq!(
+            out.console,
+            vec!["async log"],
+            "console captured from async"
+        );
     }
 }

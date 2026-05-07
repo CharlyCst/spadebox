@@ -20,11 +20,7 @@ impl boa_engine::gc::Finalize for ConsoleCaptures {}
 
 // SAFETY: `Rc<RefCell<Vec<String>>>` holds no GC-managed objects; nothing to trace.
 unsafe impl boa_engine::gc::Trace for ConsoleCaptures {
-    unsafe fn trace(&self, _: &mut boa_engine::gc::Tracer) {}
-    unsafe fn trace_non_roots(&self) {}
-    fn run_finalizer(&self) {
-        boa_engine::gc::Finalize::finalize(self);
-    }
+    boa_engine::gc::empty_trace!();
 }
 
 fn console_method(

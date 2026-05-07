@@ -5,7 +5,7 @@ use crate::{Sandbox, ToolResult};
 use crate::tool_utils::AsArc;
 
 mod edit;
-mod fetch;
+pub(crate) mod fetch;
 mod glob;
 mod grep;
 mod js_exec;

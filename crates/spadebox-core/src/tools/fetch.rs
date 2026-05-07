@@ -55,50 +55,8 @@ impl Tool for FetchTool {
 
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: FetchParams) -> ToolResult<String> {
         let sandbox = sandbox.as_arc();
-        if !sandbox.http_is_enabled() {
-            return Err(ToolError::PermissionDenied(
-                "HTTP fetch is disabled".to_string(),
-            ));
-        }
-
-        // Parse and validate the URL.
-        let url = reqwest::Url::parse(&params.url)
-            .map_err(|e| ToolError::InvalidUrl(format!("invalid URL '{}': {}", params.url, e)))?;
-
-        let scheme = url.scheme();
-        if scheme != "http" && scheme != "https" {
-            return Err(ToolError::InvalidUrl(format!(
-                "unsupported scheme '{}': only http and https are allowed",
-                scheme
-            )));
-        }
-
-        let host = url
-            .host_str()
-            .ok_or_else(|| ToolError::InvalidUrl("URL has no host".to_string()))?;
+        let (url, user_agent) = validate_request(&sandbox, &params.url, &params.method)?;
         let method_upper = params.method.to_uppercase();
-
-        // Lock the http config to check for permission and retrieve the user agent
-        let user_agent = {
-            let http_config = sandbox.http.read().unwrap();
-
-            // Find the first matching domain rule.
-            let allowed_verbs = http_config.allowed_verbs_for(host)?;
-
-            // Validate the requested method against the rule.
-            let verb = HttpVerb::parse(&method_upper).ok_or_else(|| {
-                ToolError::PermissionDenied(format!("unknown HTTP method '{}'", params.method))
-            })?;
-
-            if !allowed_verbs.contains(&verb) {
-                return Err(ToolError::PermissionDenied(format!(
-                    "method '{}' is not allowed for host '{}'",
-                    method_upper, host
-                )));
-            }
-
-            http_config.user_agent.clone()
-        };
 
         // Build and send the request.
         let client = Client::builder()
@@ -171,6 +129,58 @@ fn html_to_markdown(html: &str) -> ToolResult<String> {
         .build()
         .convert(html)
         .map_err(|e| ToolError::HttpError(format!("HTML to Markdown conversion failed: {e}")))
+}
+
+// ---------------------------------------------------------------------------
+// Security Check
+// ---------------------------------------------------------------------------
+
+/// Validates an HTTP request against the sandbox policy.
+///
+/// Checks that HTTP is enabled, the URL is valid, the scheme is http/https,
+/// and the method is permitted for the target host. Returns the parsed URL and
+/// the configured user-agent string on success.
+pub(crate) fn validate_request(
+    sandbox: &Sandbox,
+    url_str: &str,
+    method: &str,
+) -> ToolResult<(reqwest::Url, String)> {
+    if !sandbox.http_is_enabled() {
+        return Err(ToolError::PermissionDenied(
+            "HTTP fetch is disabled".to_string(),
+        ));
+    }
+
+    let url = reqwest::Url::parse(url_str)
+        .map_err(|e| ToolError::InvalidUrl(format!("invalid URL '{url_str}': {e}")))?;
+
+    let scheme = url.scheme();
+    if scheme != "http" && scheme != "https" {
+        return Err(ToolError::InvalidUrl(format!(
+            "unsupported scheme '{scheme}': only http and https are allowed"
+        )));
+    }
+
+    let host = url
+        .host_str()
+        .ok_or_else(|| ToolError::InvalidUrl("URL has no host".to_string()))?;
+
+    let method_upper = method.to_uppercase();
+    let user_agent = {
+        let http_config = sandbox.http.read().unwrap();
+        let allowed_verbs = http_config.allowed_verbs_for(host)?;
+        let verb = HttpVerb::parse(&method_upper).ok_or_else(|| {
+            ToolError::PermissionDenied(format!("unknown HTTP method '{method}'"))
+        })?;
+        if !allowed_verbs.contains(&verb) {
+            return Err(ToolError::PermissionDenied(format!(
+                "method '{method_upper}' is not allowed for host '{host}'"
+            )));
+        }
+        http_config.user_agent.clone()
+    };
+
+    Ok((url, user_agent))
 }
 
 // ---------------------------------------------------------------------------
