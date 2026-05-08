@@ -1,6 +1,6 @@
 ---
 name: maintain-docs
-description: Update all public-facing documentation after codebase changes (new tool, new parameter, new language binding). Covers spadebox-core, MCP server, JS bindings, and README.
+description: Update all public-facing documentation after codebase changes (new tool, new parameter, new language binding). Covers spadebox-core, MCP server, JS bindings, Python bindings, and README.
 ---
 
 # Maintain Documentation
@@ -45,8 +45,14 @@ them automatically — never duplicate this information elsewhere.
   Use **camelCase** for all parameter and field references in these doc comments
   because NAPI-RS converts snake_case identifiers to camelCase in the generated
   bindings. See the comment at the top of the file for details.
-- **`README.md`** — high-level overview listing available tools. Shared across
-  the repo root and `js/` via a symlink.
+- **`python/src/lib.rs`** — PyO3 bindings. Contains hand-written doc comments
+  for the `SpadeBox` class and each convenience method. These are surfaced
+  directly as Python `help()` text and are **not** auto-derived from core; they
+  must be updated manually. Use **snake_case** for all parameter and field
+  references, matching Python conventions.
+- **`README.md`** — high-level overview listing available tools and usage
+  examples for each interface. Shared across the repo root, `js/`, and
+  `python/` via a symlink.
 
 ---
 
@@ -68,7 +74,16 @@ them automatically — never duplicate this information elsewhere.
    - Pass the new parameter through to the `Params` struct inside the method
      body.
 
-3. **No changes needed** in the MCP server, `js/index.d.ts`, or JSON Schema —
+3. **`python/src/lib.rs`**
+   - Update the corresponding convenience method signature (add the new
+     parameter as `Option<T>` if it is optional, with a `#[pyo3(signature)]`
+     attribute to set the default).
+   - Update the method's doc comment to mention the new parameter, using
+     snake_case for its name.
+   - Pass the new parameter through to the `Params` struct inside the method
+     body.
+
+4. **No changes needed** in the MCP server, `js/index.d.ts`, or JSON Schema —
    they all update automatically on the next build.
 
 ### Changing a tool description
@@ -78,6 +93,9 @@ them automatically — never duplicate this information elsewhere.
 
 2. **`js/src/lib.rs`** — update the doc comment on the corresponding
    convenience method to stay consistent. Remember camelCase.
+
+3. **`python/src/lib.rs`** — update the doc comment on the corresponding
+   convenience method to stay consistent. Remember snake_case.
 
 ### Adding a new tool
 
@@ -104,7 +122,14 @@ them automatically — never duplicate this information elsewhere.
      clear doc comment using camelCase. The `tools()` method calls
      `enabled_tools(&self.inner)` automatically — no extra registration needed.
 
-5. **`README.md`** — add the new tool name to the tool list.
+5. **`python/src/lib.rs`**
+   - Add a convenience method (`pub fn <name>(...)`) annotated with
+     `#[pyo3(signature = (...))]` for optional parameters, with a clear doc
+     comment using snake_case. The `tools()` method calls
+     `enabled_tools(&self.inner)` automatically — no extra registration needed.
+   - Wrap async execution with `py.detach(|| { runtime.block_on(async { ... }) })`.
+
+6. **`README.md`** — add the new tool name to the tool list.
 
 ### Adding a new language binding (e.g. Python)
 
@@ -121,7 +146,7 @@ The goal is to mirror the pattern established by `js/`:
    as the MCP server and JS bindings do.
 5. Register the tool in `enabled_tools()` in `crates/spadebox-core/src/tools/mod.rs`
    so `tools()` (which calls `enabled_tools`) returns all tools automatically.
-6. Update `README.md` to mention the new binding.
+6. Update `README.md` to mention the new binding with a usage example.
 
 ---
 

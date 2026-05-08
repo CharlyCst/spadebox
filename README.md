@@ -15,7 +15,7 @@
 </div>
 <br/>
 
-Spadebox is a set of common tools for AI agents, written in Rust with JavaScript bindings.
+Spadebox is a set of common tools for AI agents, written in Rust with JavaScript and Python bindings.
 
 Currently, Spadebox includes the following tools:
 - `read_file`
@@ -66,6 +66,23 @@ let tools = enabled_tools(&sandbox); // pass to your LLM as available tools
 
 // dispatch a tool call coming from the model
 let result = call_tool(&sandbox, "read_file", r#"{"path":"src/main.rs"}"#.into()).await?;
+```
+
+### Python
+
+```python
+from spadebox import SpadeBox
+
+sb = (SpadeBox()
+    .enable_files("/workspace")
+    .enable_http()
+    .allow("api.example.com", ["GET", "POST"])
+    .enable_js())
+
+tools = sb.tools()  # pass to your LLM as available tools
+
+# dispatch a tool call coming from the model
+result = sb.call_tool("read_file", '{"path": "src/main.rs"}')
 ```
 
 ### MCP
