@@ -32,6 +32,7 @@ jobs:
           tool: just
       - name: Lint
         run: just lint
+
   build:
     strategy:
       fail-fast: false
@@ -39,14 +40,14 @@ jobs:
         settings:
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            build: npx --yes --package @napi-rs/cli@3 napi build --platform --target x86_64-unknown-linux-gnu
+            build-js: npx --yes --package @napi-rs/cli@3 napi build --platform --target x86_64-unknown-linux-gnu
           - host: macos-latest
             target: aarch64-apple-darwin
-            build: npx --yes --package @napi-rs/cli@3 napi build --platform --target aarch64-apple-darwin
+            build-js: npx --yes --package @napi-rs/cli@3 napi build --platform --target aarch64-apple-darwin
           - host: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            build: npx --yes --package @napi-rs/cli@3 napi build --platform --target aarch64-unknown-linux-gnu
-    name: stable - ${{ matrix.settings.target }} - node@22
+            build-js: npx --yes --package @napi-rs/cli@3 napi build --platform --target aarch64-unknown-linux-gnu
+    name: Build - ${{ matrix.settings.target }}
     runs-on: ${{ matrix.settings.host }}
     steps:
       - uses: actions/checkout@v6
@@ -85,11 +86,11 @@ jobs:
         run: ${{ matrix.settings.setup }}
         if: ${{ matrix.settings.setup }}
         shell: bash
-      - name: Build
+      - name: Build JS
         working-directory: js
-        run: ${{ matrix.settings.build }}
+        run: ${{ matrix.settings.build-js }}
         shell: bash
-      - name: Upload artifact
+      - name: Upload JS artifact
         uses: actions/upload-artifact@v7
         with:
           name: bindings-${{ matrix.settings.target }}
@@ -97,6 +98,20 @@ jobs:
             js/${{ env.APP_NAME }}.*.node
             js/${{ env.APP_NAME }}.*.wasm
           if-no-files-found: error
+      - name: Build Python wheels
+        uses: PyO3/maturin-action@v1
+        with:
+          target: ${{ matrix.settings.target }}
+          args: --release --out dist
+          manylinux: auto
+          working-directory: python
+      - name: Upload Python wheels
+        uses: actions/upload-artifact@v7
+        with:
+          name: python-wheels-${{ matrix.settings.target }}
+          path: python/dist
+          if-no-files-found: error
+
   test:
     name: Test ${{ matrix.target }}
     needs:
@@ -120,13 +135,32 @@ jobs:
         uses: taiki-e/install-action@v2
         with:
           tool: just
-      - name: Download artifacts
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v5
+      - name: Download JS artifact
         uses: actions/download-artifact@v8
         with:
           name: bindings-${{ matrix.target }}
           path: js
-      - name: Test
-        run: just test-only
+      - name: Download Python wheel
+        uses: actions/download-artifact@v8
+        with:
+          name: python-wheels-${{ matrix.target }}
+          path: python/dist
+      - name: Install Python wheel
+        working-directory: python
+        run: |
+          uv sync --no-install-project
+          uv pip install --find-links dist spadebox
+      - name: Cargo tests
+        run: cargo test
+      - name: JS tests
+        working-directory: js
+        run: deno check && deno task test
+      - name: Python tests
+        working-directory: python
+        run: uv run --no-sync pytest test
+
   publish:
     name: Publish
     runs-on: ubuntu-latest
@@ -145,18 +179,19 @@ jobs:
       - name: Create npm dirs
         working-directory: js
         run: npx --yes --package @napi-rs/cli@3 napi create-npm-dirs
-      - name: Download all artifacts
+      - name: Download JS artifacts
         uses: actions/download-artifact@v8
         with:
           path: js/artifacts
-      - name: Move artifacts
+          pattern: bindings-*
+      - name: Move JS artifacts
         working-directory: js
         run: npx --yes --package @napi-rs/cli@3 napi artifacts
-      - name: List packages
+      - name: List JS packages
         working-directory: js
         run: ls -R ./npm
         shell: bash
-      - name: Publish
+      - name: Publish JS to npm
         working-directory: js
         run: |
           npm config set provenance true
@@ -172,3 +207,14 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - name: Download Python wheels
+        uses: actions/download-artifact@v8
+        with:
+          path: python-dist
+          pattern: python-wheels-*
+          merge-multiple: true
+      - name: Publish Python to PyPI
+        if: github.ref_type == 'tag'
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: python-dist/
