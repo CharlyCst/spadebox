@@ -85,7 +85,7 @@ fn do_write(sandbox: Arc<Sandbox>, mut params: WriteParams) -> ToolResult<String
     // external modifications by comparing the stored mtime against the current one.
     if let Ok(metadata) = root.metadata(&params.path) {
         let current_mtime = metadata.modified().map_err(ToolError::IoError)?;
-        fs_utils::check_write_allowed(&mut fs_config.read_registry, &params.path, current_mtime)?;
+        fs_utils::check_write_allowed(&fs_config.read_registry, &params.path, current_mtime)?;
     }
 
     let root = fs_config.root.as_mut().expect("Missing sandbox root");

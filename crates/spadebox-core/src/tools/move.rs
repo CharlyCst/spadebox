@@ -53,10 +53,7 @@ impl Tool for MoveTool {
     }
 }
 
-fn do_move(
-    sandbox: Arc<Sandbox>,
-    mut params: MoveParams,
-) -> ToolResult<String> {
+fn do_move(sandbox: Arc<Sandbox>, mut params: MoveParams) -> ToolResult<String> {
     params.src = fs_utils::normalize_path(&params.src).to_string();
     let mut fs_config = sandbox.files.write().unwrap();
     let root = fs_config.root.as_ref().expect("Missing sandbox root");
@@ -71,13 +68,12 @@ fn do_move(
             ))));
         }
 
-        if params.create_dirs {
-            if let Some(parent) = std::path::Path::new(&dst).parent()
-                && parent != std::path::Path::new("")
-            {
-                root.create_dir_all(parent)
-                    .map_err(|e| map_io_err(&parent.to_string_lossy(), e))?;
-            }
+        if params.create_dirs
+            && let Some(parent) = std::path::Path::new(&dst).parent()
+            && parent != std::path::Path::new("")
+        {
+            root.create_dir_all(parent)
+                .map_err(|e| map_io_err(&parent.to_string_lossy(), e))?;
         }
 
         // cap_std::Dir::rename takes two Dir handles (from_dir, from, to_dir, to).
@@ -125,7 +121,7 @@ mod tests {
     use std::fs;
     use tempfile::TempDir;
 
-    fn setup() -> (TempDir, Arc::<Sandbox>) {
+    fn setup() -> (TempDir, Arc<Sandbox>) {
         let dir = TempDir::new().unwrap();
         let sandbox = Arc::new(Sandbox::new());
         sandbox.enable_fs(dir.path()).unwrap();

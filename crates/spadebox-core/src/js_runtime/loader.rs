@@ -1,14 +1,13 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
 use boa_engine::{
-    js_string,
+    Context, JsNativeError, JsResult, JsString, JsValue, Module, NativeFunction, js_string,
     module::{ModuleLoader, Referrer, SyntheticModuleInitializer},
     property::PropertyKey,
-    Context, JsNativeError, JsResult, JsString, JsValue, Module, NativeFunction,
 };
 
-use crate::Sandbox;
 use super::{SandboxCaptures, files};
+use crate::Sandbox;
 
 /// Module loader that resolves built-in SpadeBox modules (`fs`, `node:fs`).
 pub(super) struct SpadeboxModuleLoader {
@@ -23,7 +22,11 @@ impl ModuleLoader for SpadeboxModuleLoader {
         context: &RefCell<&mut Context>,
     ) -> JsResult<Module> {
         let spec = specifier.to_std_string_lossy();
-        let value = resolve(spec.as_str(), Arc::clone(&self.sandbox), &mut context.borrow_mut())?;
+        let value = resolve(
+            spec.as_str(),
+            Arc::clone(&self.sandbox),
+            &mut context.borrow_mut(),
+        )?;
         into_es_module(value, &mut context.borrow_mut())
     }
 }
@@ -102,8 +105,8 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
 
-    use crate::Sandbox;
     use super::super::JsContext;
+    use crate::Sandbox;
 
     fn setup() -> (JsContext, TempDir) {
         let dir = TempDir::new().unwrap();
@@ -119,12 +122,24 @@ mod tests {
         // require('fs') returns an object with all fs functions
         ctx.eval(r#"const fs = require('fs')"#).unwrap();
         ctx.eval(r#"fs.writeFileSync("a.txt", "hi")"#).unwrap();
-        assert_eq!(ctx.eval(r#"fs.readFileSync("a.txt")"#).unwrap().value, r#""hi""#);
+        assert_eq!(
+            ctx.eval(r#"fs.readFileSync("a.txt")"#).unwrap().value,
+            r#""hi""#
+        );
         // node:fs prefix and destructuring work too
-        ctx.eval(r#"const { readFileSync, writeFileSync } = require('node:fs')"#).unwrap();
+        ctx.eval(r#"const { readFileSync, writeFileSync } = require('node:fs')"#)
+            .unwrap();
         ctx.eval(r#"writeFileSync("b.txt", "hello")"#).unwrap();
-        assert_eq!(ctx.eval(r#"readFileSync("b.txt")"#).unwrap().value, r#""hello""#);
+        assert_eq!(
+            ctx.eval(r#"readFileSync("b.txt")"#).unwrap().value,
+            r#""hello""#
+        );
         // unknown modules throw
-        assert!(ctx.eval(r#"require('os')"#).unwrap_err().to_string().contains("JS error"));
+        assert!(
+            ctx.eval(r#"require('os')"#)
+                .unwrap_err()
+                .to_string()
+                .contains("JS error")
+        );
     }
 }

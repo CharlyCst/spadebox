@@ -1,16 +1,16 @@
 use std::sync::Arc;
 
 use boa_engine::{
-    js_string,
-    job::{Job, PromiseJob},
-    object::{builtins::JsPromise, ObjectInitializer},
-    property::Attribute,
     Context, JsNativeError, JsResult, JsValue, NativeFunction,
+    job::{Job, PromiseJob},
+    js_string,
+    object::{ObjectInitializer, builtins::JsPromise},
+    property::Attribute,
 };
 use reqwest::Client;
 
-use crate::{Sandbox, ToolError};
 use crate::tools::fetch::validate_request;
+use crate::{Sandbox, ToolError};
 
 use super::SandboxCaptures;
 
@@ -64,8 +64,8 @@ fn fetch_fn(
     // --- Security check (synchronous, before enqueuing any async work) ---
     let sandbox = Arc::clone(&captures.sandbox);
 
-    let (url, user_agent) = validate_request(&sandbox, &url_str, &method_str)
-        .map_err(|e| match e {
+    let (url, user_agent) =
+        validate_request(&sandbox, &url_str, &method_str).map_err(|e| match e {
             ToolError::PermissionDenied(msg) | ToolError::InvalidUrl(msg) => {
                 JsNativeError::error().with_message(format!("fetch: {msg}"))
             }
@@ -198,10 +198,7 @@ fn build_response(status: u16, body: String, ctx: &mut Context) -> boa_engine::J
             0,
         )
         .function(
-            NativeFunction::from_copy_closure_with_captures(
-                json_method,
-                ResponseCaptures { body },
-            ),
+            NativeFunction::from_copy_closure_with_captures(json_method, ResponseCaptures { body }),
             js_string!("json"),
             0,
         )
@@ -265,7 +262,8 @@ mod tests {
 
         // Verb not allowed for domain.
         assert!(
-            ctx.eval(r#"fetch("https://allowed.com", { method: "POST" })"#).is_err(),
+            ctx.eval(r#"fetch("https://allowed.com", { method: "POST" })"#)
+                .is_err(),
             "should throw for disallowed verb"
         );
     }

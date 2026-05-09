@@ -25,7 +25,7 @@ use globset::{Glob, GlobSet, GlobSetBuilder};
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{Sandbox, ToolError, ToolResult, sandbox::map_io_err, AsArc};
+use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::map_io_err};
 
 use super::Tool;
 

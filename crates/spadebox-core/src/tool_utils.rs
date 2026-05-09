@@ -17,11 +17,11 @@ pub(crate) type Registry = HashMap<String, SystemTime>;
 /// source file; small enough to protect the context window.
 pub const DEFAULT_MAX_BYTES: u64 = 20_000;
 
-
 /// A simple trait for Arc ergonomics.
 ///
 /// [AsArc] is implemented for both `Arc` and `&Arc`, and enables cloning on demand.
 pub trait AsArc<T> {
+    #[allow(clippy::wrong_self_convention)]
     fn as_arc(self) -> Arc<T>;
 }
 

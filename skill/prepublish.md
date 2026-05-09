@@ -15,6 +15,18 @@ This skill covers publishing the Rust crates, JS bindings, and Python bindings.
 
 ---
 
+## Pre-flight
+
+Run lint before doing anything else:
+
+```
+just lint
+```
+
+Fix any issues before proceeding with version bumps or publishing.
+
+---
+
 ## Changelog
 
 Before bumping any version, add a new entry to `CHANGELOG.md` for the release:
@@ -43,10 +55,10 @@ Rust crates are published manually by the user.
 
 2. **Dry-run** to catch any issues before publishing:
    ```
-   cargo publish --workspace --dry-run
+   cargo publish --workspace --dry-run --allow-dirty
    ```
 
-3. If the dry-run passes, **publish**:
+3. The user will have to run (never run it yourself):
    ```
    cargo publish --workspace
    ```

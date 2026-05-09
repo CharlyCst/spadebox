@@ -65,7 +65,12 @@ impl Tool for ReadFileTool {
                 .metadata()
                 .and_then(|m| m.modified())
                 .map_err(ToolError::IoError)?;
-            sandbox.files.write().unwrap().read_registry.insert(path.clone(), mtime);
+            sandbox
+                .files
+                .write()
+                .unwrap()
+                .read_registry
+                .insert(path.clone(), mtime);
 
             let content = String::from_utf8_lossy(&buf).into_owned();
             let windowed = apply_window(content, params.offset, params.limit);

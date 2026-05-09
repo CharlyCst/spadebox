@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 use std::path::Path;
-use std::sync::{Arc, RwLock};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, RwLock};
 
 use crate::tool_utils::Registry;
-use crate::{ToolError, ToolResult, AsArc};
+use crate::{AsArc, ToolError, ToolResult};
 use cap_std::ambient_authority;
 use cap_std::fs::Dir;
 
@@ -211,7 +211,10 @@ impl FilesConfig {
 
 /// A request sent to the dedicated JS context thread: source code to evaluate
 /// and a one-shot reply channel to return the result on.
-type JsRequest = (String, tokio::sync::oneshot::Sender<ToolResult<crate::js_runtime::JsOutput>>);
+type JsRequest = (
+    String,
+    tokio::sync::oneshot::Sender<ToolResult<crate::js_runtime::JsOutput>>,
+);
 
 /// Live handle to the dedicated JS REPL thread.
 ///
@@ -276,14 +279,21 @@ impl JsConfig {
     }
 
     /// Sends `code` to the JS context thread and awaits the result.
-    pub(crate) async fn repl_eval(&self, sandbox: Arc<Sandbox>, code: String) -> ToolResult<crate::js_runtime::JsOutput> {
+    pub(crate) async fn repl_eval(
+        &self,
+        sandbox: Arc<Sandbox>,
+        code: String,
+    ) -> ToolResult<crate::js_runtime::JsOutput> {
         self.init_repl_handle(sandbox);
         let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
 
         // Lock the handle, send the message, and release the lock before awaiting the answer.
         {
             let handle = self.repl_handle.read().unwrap();
-            let tx = &handle.as_ref().expect("init_repl_handle guarantees Some").tx;
+            let tx = &handle
+                .as_ref()
+                .expect("init_repl_handle guarantees Some")
+                .tx;
             tx.send((code, reply_tx))
                 .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?;
         }
@@ -293,7 +303,6 @@ impl JsConfig {
             .await
             .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?
     }
-
 }
 
 // ---------------------------------------------------------------------------

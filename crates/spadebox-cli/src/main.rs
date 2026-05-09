@@ -184,7 +184,11 @@ async fn main() -> anyhow::Result<()> {
             }
         }
         Command::Tools {
-            action: ToolsAction::Info { tool_name, markdown },
+            action:
+                ToolsAction::Info {
+                    tool_name,
+                    markdown,
+                },
         } => {
             let tool = enabled_tools(&sandbox)
                 .into_iter()
@@ -195,16 +199,14 @@ async fn main() -> anyhow::Result<()> {
         Command::Run {
             tool_name,
             json_args,
-        } => {
-            match spadebox_core::call_tool(&sandbox, &tool_name, json_args).await {
-                Err(protocol_err) => anyhow::bail!("{protocol_err}"),
-                Ok(Err(tool_err)) => {
-                    eprintln!("error: {tool_err}");
-                    std::process::exit(1);
-                }
-                Ok(Ok(output)) => print!("{output}"),
+        } => match spadebox_core::call_tool(&sandbox, &tool_name, json_args).await {
+            Err(protocol_err) => anyhow::bail!("{protocol_err}"),
+            Ok(Err(tool_err)) => {
+                eprintln!("error: {tool_err}");
+                std::process::exit(1);
             }
-        }
+            Ok(Ok(output)) => print!("{output}"),
+        },
     }
 
     Ok(())

@@ -1,8 +1,8 @@
 use schemars::JsonSchema;
 use serde::Deserialize;
 
-use crate::{Sandbox, ToolResult};
 use crate::tool_utils::AsArc;
+use crate::{Sandbox, ToolResult};
 
 mod edit;
 pub(crate) mod fetch;

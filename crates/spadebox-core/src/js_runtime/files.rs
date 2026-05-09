@@ -2,15 +2,14 @@ use std::io::Write;
 use std::sync::Arc;
 
 use boa_engine::{
-    js_string,
-    object::{builtins::JsArray, ObjectInitializer},
+    Context, JsNativeError, JsResult, JsValue, NativeFunction, js_string,
+    object::{ObjectInitializer, builtins::JsArray},
     property::Attribute,
-    Context, JsNativeError, JsResult, JsValue, NativeFunction,
 };
 use cap_std::fs::OpenOptions;
 
-use crate::Sandbox;
 use super::SandboxCaptures;
+use crate::Sandbox;
 
 /// Builds the `fs` object with Node-compatible synchronous file APIs.
 pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_engine::JsObject {
@@ -76,10 +75,7 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
             1,
         )
         .function(
-            NativeFunction::from_copy_closure_with_captures(
-                stat_sync,
-                SandboxCaptures { sandbox },
-            ),
+            NativeFunction::from_copy_closure_with_captures(stat_sync, SandboxCaptures { sandbox }),
             js_string!("statSync"),
             1,
         )
@@ -120,7 +116,11 @@ fn require_fs_root<'a>(
 fn string_arg(args: &[JsValue], index: usize, name: &str) -> JsResult<String> {
     args.get(index)
         .and_then(|v| v.as_string())
-        .ok_or_else(|| JsNativeError::typ().with_message(format!("{name} must be a string")).into())
+        .ok_or_else(|| {
+            JsNativeError::typ()
+                .with_message(format!("{name} must be a string"))
+                .into()
+        })
         .map(|s| s.to_std_string_lossy())
 }
 
@@ -182,7 +182,10 @@ fn append_file_sync(
     let root = require_fs_root(captures, &files)?;
 
     let mut file = root
-        .open_with(&path, OpenOptions::new().write(true).append(true).create(true))
+        .open_with(
+            &path,
+            OpenOptions::new().write(true).append(true).create(true),
+        )
         .map_err(|e| JsNativeError::error().with_message(e.to_string()))?;
 
     file.write_all(data.as_bytes())
@@ -296,7 +299,10 @@ fn stat_sync(
     let mtime_ms = meta
         .modified()
         .ok()
-        .and_then(|t| t.duration_since(cap_std::time::SystemClock::UNIX_EPOCH).ok())
+        .and_then(|t| {
+            t.duration_since(cap_std::time::SystemClock::UNIX_EPOCH)
+                .ok()
+        })
         .map(|d| d.as_millis() as f64)
         .unwrap_or(0.0);
     let is_file = meta.is_file();
@@ -329,8 +335,8 @@ mod tests {
     use std::sync::Arc;
     use tempfile::TempDir;
 
-    use crate::Sandbox;
     use super::super::JsContext;
+    use crate::Sandbox;
 
     fn setup() -> (JsContext, TempDir) {
         let dir = TempDir::new().unwrap();
@@ -352,12 +358,27 @@ mod tests {
     fn read_file_sync() {
         let (mut ctx, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hello world")"#);
-        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("a.txt")"#), r#""hello world""#);
-        assert_eq!(eval(&mut ctx, r#"typeof fs.readFileSync("a.txt")"#), r#""string""#);
+        assert_eq!(
+            eval(&mut ctx, r#"fs.readFileSync("a.txt")"#),
+            r#""hello world""#
+        );
+        assert_eq!(
+            eval(&mut ctx, r#"typeof fs.readFileSync("a.txt")"#),
+            r#""string""#
+        );
         assert_eq!(eval(&mut ctx, r#"fs.readFileSync("a.txt").length"#), "11");
-        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("a.txt").toUpperCase()"#), r#""HELLO WORLD""#);
-        eval(&mut ctx, r#"fs.writeFileSync("data.json", JSON.stringify({a: 1, b: 2}))"#);
-        assert_eq!(eval(&mut ctx, r#"JSON.parse(fs.readFileSync("data.json")).a"#), "1");
+        assert_eq!(
+            eval(&mut ctx, r#"fs.readFileSync("a.txt").toUpperCase()"#),
+            r#""HELLO WORLD""#
+        );
+        eval(
+            &mut ctx,
+            r#"fs.writeFileSync("data.json", JSON.stringify({a: 1, b: 2}))"#,
+        );
+        assert_eq!(
+            eval(&mut ctx, r#"JSON.parse(fs.readFileSync("data.json")).a"#),
+            "1"
+        );
         eval(&mut ctx, r#"fs.writeFileSync("empty.txt", "")"#);
         assert_eq!(eval(&mut ctx, r#"fs.readFileSync("empty.txt")"#), r#""""#);
         assert!(eval_err(&mut ctx, r#"fs.readFileSync("nope.txt")"#).contains("JS error"));
@@ -367,7 +388,10 @@ mod tests {
     #[test]
     fn write_file_sync() {
         let (mut ctx, _dir) = setup();
-        assert_eq!(eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#), "undefined");
+        assert_eq!(
+            eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#),
+            "undefined"
+        );
         eval(&mut ctx, r#"fs.writeFileSync("a.txt", "second")"#);
         assert_eq!(eval(&mut ctx, r#"fs.readFileSync("a.txt")"#), r#""second""#);
     }
@@ -377,9 +401,15 @@ mod tests {
         let (mut ctx, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("log.txt", "line1")"#);
         eval(&mut ctx, r#"fs.appendFileSync("log.txt", "\nline2")"#);
-        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("log.txt")"#), r#""line1\nline2""#);
+        assert_eq!(
+            eval(&mut ctx, r#"fs.readFileSync("log.txt")"#),
+            r#""line1\nline2""#
+        );
         eval(&mut ctx, r#"fs.appendFileSync("new.txt", "content")"#);
-        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("new.txt")"#), r#""content""#);
+        assert_eq!(
+            eval(&mut ctx, r#"fs.readFileSync("new.txt")"#),
+            r#""content""#
+        );
     }
 
     #[test]
@@ -393,7 +423,10 @@ mod tests {
     #[test]
     fn readdir_sync() {
         let (mut ctx, _dir) = setup();
-        assert_eq!(eval(&mut ctx, r#"Array.isArray(fs.readdirSync("."))"#), "true");
+        assert_eq!(
+            eval(&mut ctx, r#"Array.isArray(fs.readdirSync("."))"#),
+            "true"
+        );
         eval(&mut ctx, r#"fs.writeFileSync("a.txt", "")"#);
         eval(&mut ctx, r#"fs.writeFileSync("b.txt", "")"#);
         assert_eq!(
@@ -418,10 +451,19 @@ mod tests {
         eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#);
         assert_eq!(eval(&mut ctx, r#"fs.statSync("a.txt").size"#), "2");
         assert_eq!(eval(&mut ctx, r#"fs.statSync("a.txt").isFile()"#), "true");
-        assert_eq!(eval(&mut ctx, r#"fs.statSync("a.txt").isDirectory()"#), "false");
-        assert_eq!(eval(&mut ctx, r#"fs.statSync("a.txt").mtimeMs > 0"#), "true");
+        assert_eq!(
+            eval(&mut ctx, r#"fs.statSync("a.txt").isDirectory()"#),
+            "false"
+        );
+        assert_eq!(
+            eval(&mut ctx, r#"fs.statSync("a.txt").mtimeMs > 0"#),
+            "true"
+        );
         eval(&mut ctx, r#"fs.mkdirSync("sub")"#);
-        assert_eq!(eval(&mut ctx, r#"fs.statSync("sub").isDirectory()"#), "true");
+        assert_eq!(
+            eval(&mut ctx, r#"fs.statSync("sub").isDirectory()"#),
+            "true"
+        );
         assert_eq!(eval(&mut ctx, r#"fs.statSync("sub").isFile()"#), "false");
         assert!(eval_err(&mut ctx, r#"fs.statSync("nope.txt")"#).contains("JS error"));
     }

@@ -77,9 +77,14 @@ mod tests {
         let (dir, sandbox) = setup();
         std::fs::write(dir.path().join("script.js"), "1 + 1").unwrap();
 
-        let result = JsExecTool::run(&sandbox, JsExecParams { path: "script.js".into() })
-            .await
-            .unwrap();
+        let result = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "script.js".into(),
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(result, "");
     }
 
@@ -88,9 +93,14 @@ mod tests {
         let (dir, sandbox) = setup();
         std::fs::write(dir.path().join("err.js"), "throw new Error('boom')").unwrap();
 
-        let err = JsExecTool::run(&sandbox, JsExecParams { path: "err.js".into() })
-            .await
-            .unwrap_err();
+        let err = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "err.js".into(),
+            },
+        )
+        .await
+        .unwrap_err();
         assert!(matches!(err, ToolError::JsError(_)));
     }
 
@@ -98,9 +108,14 @@ mod tests {
     async fn missing_file_returns_error() {
         let (_dir, sandbox) = setup();
 
-        let err = JsExecTool::run(&sandbox, JsExecParams { path: "nope.js".into() })
-            .await
-            .unwrap_err();
+        let err = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "nope.js".into(),
+            },
+        )
+        .await
+        .unwrap_err();
         assert!(matches!(err, ToolError::NotFound(_)));
     }
 
@@ -115,12 +130,22 @@ mod tests {
         )
         .unwrap();
 
-        JsExecTool::run(&sandbox, JsExecParams { path: "a.js".into() })
-            .await
-            .unwrap();
-        JsExecTool::run(&sandbox, JsExecParams { path: "b.js".into() })
-            .await
-            .unwrap();
+        JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "a.js".into(),
+            },
+        )
+        .await
+        .unwrap();
+        JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "b.js".into(),
+            },
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -133,9 +158,14 @@ mod tests {
         )
         .unwrap();
 
-        JsExecTool::run(&sandbox, JsExecParams { path: "read.js".into() })
-            .await
-            .unwrap();
+        JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "read.js".into(),
+            },
+        )
+        .await
+        .unwrap();
     }
 
     #[tokio::test]
@@ -145,9 +175,14 @@ mod tests {
         sandbox.enable_fs(dir.path()).unwrap();
         // JS not enabled
 
-        let err = JsExecTool::run(&sandbox, JsExecParams { path: "x.js".into() })
-            .await
-            .unwrap_err();
+        let err = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "x.js".into(),
+            },
+        )
+        .await
+        .unwrap_err();
         assert!(matches!(err, ToolError::PermissionDenied(_)));
     }
 
@@ -157,9 +192,14 @@ mod tests {
         sandbox.enable_js();
         // FS not enabled
 
-        let err = JsExecTool::run(&sandbox, JsExecParams { path: "x.js".into() })
-            .await
-            .unwrap_err();
+        let err = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "x.js".into(),
+            },
+        )
+        .await
+        .unwrap_err();
         assert!(matches!(err, ToolError::PermissionDenied(_)));
     }
 }

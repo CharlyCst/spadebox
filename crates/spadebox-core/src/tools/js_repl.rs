@@ -35,7 +35,10 @@ impl Tool for JsReplTool {
                 "JS REPL is disabled".to_string(),
             ));
         }
-        let output = sandbox.js.repl_eval(Arc::clone(&sandbox), params.code).await?;
+        let output = sandbox
+            .js
+            .repl_eval(Arc::clone(&sandbox), params.code)
+            .await?;
         if output.console.is_empty() {
             Ok(output.value)
         } else {
