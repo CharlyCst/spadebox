@@ -1,16 +1,17 @@
 ---
 name: prepublish
-description: Step-by-step checklist for publishing a new version of Spadebox to crates.io (Rust) and NPM (JS bindings).
+description: Step-by-step checklist for publishing a new version of Spadebox to crates.io (Rust), NPM (JS bindings), and PyPI (Python bindings).
 ---
 
 # Publishing Spadebox
 
-This skill covers publishing both the Rust crates and the JS bindings.
+This skill covers publishing the Rust crates, JS bindings, and Python bindings.
 
 | Package | Published by | How |
 |---|---|---|
-| Rust crates (`spadebox-core`, `spadebox-mcp`) | User, manually | `cargo publish` |
-| JS bindings (`@spadebox/spadebox`) | CI | Triggered automatically |
+| Rust crates (`spadebox-core`, `spadebox-mcp`, `spadebox-cli`) | User, manually | `cargo publish` |
+| JS bindings (`@spadebox/spadebox`) | CI | Triggered automatically on tag push |
+| Python bindings (`spadebox`) | CI | Triggered automatically on tag push |
 
 ---
 
@@ -35,7 +36,10 @@ Rust crates are published manually by the user.
 
 ### Checklist
 
-1. **Bump the version** in the relevant `Cargo.toml` files.
+1. **Bump the version** in the relevant `Cargo.toml` files:
+   - `crates/spadebox-core/Cargo.toml`
+   - `crates/spadebox-mcp/Cargo.toml` — also update the `spadebox-core` dependency version
+   - `crates/spadebox-cli/Cargo.toml` — also update the `spadebox-core` dependency version
 
 2. **Dry-run** to catch any issues before publishing:
    ```
@@ -95,3 +99,36 @@ node -e "const sb = require('@spadebox/spadebox'); console.log(Object.keys(sb));
 ```
 
 This should print `[ 'SpadeBox' ]` without errors.
+
+---
+
+## Python Bindings
+
+The Python bindings are published through CI via maturin. The CI builds wheels
+for each target platform and publishes them to PyPI.
+
+### Important: Manual Version Bump Required
+
+Before triggering the CI, the version must be updated **manually** in two files:
+
+1. `python/pyproject.toml` — the `version` field under `[project]`.
+2. `python/Cargo.toml` — the `version` field under `[package]`.
+
+Both must be kept in sync.
+
+### Checklist
+
+1. **Bump `version`** in `python/pyproject.toml`.
+
+2. **Bump `version`** in `python/Cargo.toml` to match.
+
+3. **Trigger the CI** — the CI will build wheels for all targets and publish to PyPI.
+
+### Verification
+
+After the CI completes, verify the install works end-to-end:
+
+```sh
+pip install spadebox==<new-version>
+python -c "import spadebox; print(dir(spadebox))"
+```

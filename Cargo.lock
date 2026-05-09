@@ -2379,7 +2379,7 @@ dependencies = [
 
 [[package]]
 name = "spadebox-cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2390,7 +2390,7 @@ dependencies = [
 
 [[package]]
 name = "spadebox-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "boa_engine",
  "cap-std",
@@ -2422,7 +2422,7 @@ dependencies = [
 
 [[package]]
 name = "spadebox-mcp"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -2434,7 +2434,7 @@ dependencies = [
 
 [[package]]
 name = "spadebox-python"
-version = "0.1.0"
+version = "0.4.0"
 dependencies = [
  "pyo3",
  "serde_json",

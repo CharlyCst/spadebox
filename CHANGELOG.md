@@ -2,6 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.4.0] - 2026-05-09
+
+### Added
+- **Python bindings**: New Python bindings for Spadebox.
+- **`js_exec` tool**: Execute JavaScript files in the embedded runtime. Available via Rust library, JS bindings, and MCP server.
+- **CLI**: New `spadebox` CLI for testing tools from the command line, including `tools info <tool_name>`.
+- `js` runtime: Support for `fetch`.
+- `js` runtime: Basic `console` APIs (`console.log`, etc.).
+- `js` runtime: Support for `import` and `require` of the `fs` module.
+- `js` runtime: Synchronous file API (`readFileSync`, `writeFileSync`, etc.).
+
 ## [0.3.0] - 2026-05-04
 
 ### Added
