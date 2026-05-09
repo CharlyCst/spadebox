@@ -141,8 +141,8 @@ impl Tool for GlobTool {
     const DESCRIPTION: &'static str = "\
         List files matching a glob pattern. \
         Returns a newline-separated list of relative file paths sorted alphabetically. \
-        Use '**' to match across directories (e.g. '**/*.rs' finds all Rust files, \
-        'src/**/*.ts' finds TypeScript files under src/).";
+        Use `**` to match across directories (e.g. `**/*.rs` finds all Rust files, \
+        `src/**/*.ts` finds TypeScript files under src/).";
 
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: GlobParams) -> ToolResult<String> {
         let sandbox = sandbox.as_arc();

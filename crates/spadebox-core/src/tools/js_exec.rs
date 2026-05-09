@@ -13,7 +13,7 @@ pub struct JsExecTool;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct JsExecParams {
-    /// Path to the JavaScript file to execute, relative to the sandbox root.
+    /// Path to the JavaScript file to execute.
     pub path: String,
 }
 
