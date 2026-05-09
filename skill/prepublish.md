@@ -17,10 +17,11 @@ This skill covers publishing the Rust crates, JS bindings, and Python bindings.
 
 ## Pre-flight
 
-Run lint before doing anything else:
+Run lints abd tests before doing anything else:
 
 ```
 just lint
+just test
 ```
 
 Fix any issues before proceeding with version bumps or publishing.
