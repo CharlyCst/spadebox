@@ -1,0 +1,15 @@
+{
+  "workspace": ["js/"],
+  "nodeModulesDir": "auto",
+  "fmt": {
+    "lineWidth": 120,
+    "singleQuote": true,
+    "semiColons": false,
+    "exclude": ["**/*.md"]
+  },
+  "compilerOptions": {
+    "strict": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true
+  }
+}

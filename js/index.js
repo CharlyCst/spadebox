@@ -63,7 +63,7 @@ const isMuslFromChildProcess = () => {
 function requireNative() {
   if (process.env.NAPI_RS_NATIVE_LIBRARY_PATH) {
     try {
-      return require(process.env.NAPI_RS_NATIVE_LIBRARY_PATH);
+      return require(process.env.NAPI_RS_NATIVE_LIBRARY_PATH)
     } catch (err) {
       loadErrors.push(err)
     }
@@ -77,8 +77,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-android-arm64')
         const bindingPackageVersion = require('@spadebox/spadebox-android-arm64/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -93,8 +98,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-android-arm-eabi')
         const bindingPackageVersion = require('@spadebox/spadebox-android-arm-eabi/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -105,38 +115,51 @@ function requireNative() {
     }
   } else if (process.platform === 'win32') {
     if (process.arch === 'x64') {
-      if (process.config?.variables?.shlib_suffix === 'dll.a' || process.config?.variables?.node_target_type === 'shared_library') {
+      if (
+        process.config?.variables?.shlib_suffix === 'dll.a' ||
+        process.config?.variables?.node_target_type === 'shared_library'
+      ) {
         try {
-        return require('./spadebox.win32-x64-gnu.node')
-      } catch (e) {
-        loadErrors.push(e)
-      }
-      try {
-        const binding = require('@spadebox/spadebox-win32-x64-gnu')
-        const bindingPackageVersion = require('@spadebox/spadebox-win32-x64-gnu/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          return require('./spadebox.win32-x64-gnu.node')
+        } catch (e) {
+          loadErrors.push(e)
         }
-        return binding
-      } catch (e) {
-        loadErrors.push(e)
-      }
+        try {
+          const binding = require('@spadebox/spadebox-win32-x64-gnu')
+          const bindingPackageVersion = require('@spadebox/spadebox-win32-x64-gnu/package.json').version
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
+          }
+          return binding
+        } catch (e) {
+          loadErrors.push(e)
+        }
       } else {
         try {
-        return require('./spadebox.win32-x64-msvc.node')
-      } catch (e) {
-        loadErrors.push(e)
-      }
-      try {
-        const binding = require('@spadebox/spadebox-win32-x64-msvc')
-        const bindingPackageVersion = require('@spadebox/spadebox-win32-x64-msvc/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          return require('./spadebox.win32-x64-msvc.node')
+        } catch (e) {
+          loadErrors.push(e)
         }
-        return binding
-      } catch (e) {
-        loadErrors.push(e)
-      }
+        try {
+          const binding = require('@spadebox/spadebox-win32-x64-msvc')
+          const bindingPackageVersion = require('@spadebox/spadebox-win32-x64-msvc/package.json').version
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
+          }
+          return binding
+        } catch (e) {
+          loadErrors.push(e)
+        }
       }
     } else if (process.arch === 'ia32') {
       try {
@@ -147,8 +170,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-win32-ia32-msvc')
         const bindingPackageVersion = require('@spadebox/spadebox-win32-ia32-msvc/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -163,8 +191,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-win32-arm64-msvc')
         const bindingPackageVersion = require('@spadebox/spadebox-win32-arm64-msvc/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -182,8 +215,13 @@ function requireNative() {
     try {
       const binding = require('@spadebox/spadebox-darwin-universal')
       const bindingPackageVersion = require('@spadebox/spadebox-darwin-universal/package.json').version
-      if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-        throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+      if (
+        bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+        process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+      ) {
+        throw new Error(
+          `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+        )
       }
       return binding
     } catch (e) {
@@ -198,8 +236,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-darwin-x64')
         const bindingPackageVersion = require('@spadebox/spadebox-darwin-x64/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -214,8 +257,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-darwin-arm64')
         const bindingPackageVersion = require('@spadebox/spadebox-darwin-arm64/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -234,8 +282,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-freebsd-x64')
         const bindingPackageVersion = require('@spadebox/spadebox-freebsd-x64/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -250,8 +303,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-freebsd-arm64')
         const bindingPackageVersion = require('@spadebox/spadebox-freebsd-arm64/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -271,8 +329,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-x64-musl')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-x64-musl/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -287,8 +350,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-x64-gnu')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-x64-gnu/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -305,8 +373,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-arm64-musl')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-arm64-musl/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -321,8 +394,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-arm64-gnu')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-arm64-gnu/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -339,8 +417,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-arm-musleabihf')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-arm-musleabihf/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -355,8 +438,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-arm-gnueabihf')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-arm-gnueabihf/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -373,8 +461,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-loong64-musl')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-loong64-musl/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -389,8 +482,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-loong64-gnu')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-loong64-gnu/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -407,8 +505,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-riscv64-musl')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-riscv64-musl/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -423,8 +526,13 @@ function requireNative() {
         try {
           const binding = require('@spadebox/spadebox-linux-riscv64-gnu')
           const bindingPackageVersion = require('@spadebox/spadebox-linux-riscv64-gnu/package.json').version
-          if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-            throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+          if (
+            bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+            process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+          ) {
+            throw new Error(
+              `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+            )
           }
           return binding
         } catch (e) {
@@ -440,8 +548,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-linux-ppc64-gnu')
         const bindingPackageVersion = require('@spadebox/spadebox-linux-ppc64-gnu/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -456,8 +569,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-linux-s390x-gnu')
         const bindingPackageVersion = require('@spadebox/spadebox-linux-s390x-gnu/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -476,8 +594,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-openharmony-arm64')
         const bindingPackageVersion = require('@spadebox/spadebox-openharmony-arm64/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -492,8 +615,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-openharmony-x64')
         const bindingPackageVersion = require('@spadebox/spadebox-openharmony-x64/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {
@@ -508,8 +636,13 @@ function requireNative() {
       try {
         const binding = require('@spadebox/spadebox-openharmony-arm')
         const bindingPackageVersion = require('@spadebox/spadebox-openharmony-arm/package.json').version
-        if (bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK && process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0') {
-          throw new Error(`Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`)
+        if (
+          bindingPackageVersion !== '0.4.0' && process.env.NAPI_RS_ENFORCE_VERSION_CHECK &&
+          process.env.NAPI_RS_ENFORCE_VERSION_CHECK !== '0'
+        ) {
+          throw new Error(
+            `Native binding package version mismatch, expected 0.4.0 but got ${bindingPackageVersion}. You can reinstall dependencies to fix this issue.`,
+          )
         }
         return binding
       } catch (e) {

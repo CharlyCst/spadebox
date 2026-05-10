@@ -7,11 +7,11 @@ description: Step-by-step checklist for publishing a new version of Spadebox to 
 
 This skill covers publishing the Rust crates, JS bindings, and Python bindings.
 
-| Package | Published by | How |
-|---|---|---|
-| Rust crates (`spadebox-core`, `spadebox-mcp`, `spadebox-cli`) | User, manually | `cargo publish` |
-| JS bindings (`@spadebox/spadebox`) | CI | Triggered automatically on tag push |
-| Python bindings (`spadebox`) | CI | Triggered automatically on tag push |
+| Package                                                       | Published by   | How                                 |
+| ------------------------------------------------------------- | -------------- | ----------------------------------- |
+| Rust crates (`spadebox-core`, `spadebox-mcp`, `spadebox-cli`) | User, manually | `cargo publish`                     |
+| JS bindings (`@spadebox/spadebox`)                            | CI             | Triggered automatically on tag push |
+| Python bindings (`spadebox`)                                  | CI             | Triggered automatically on tag push |
 
 ---
 
@@ -37,8 +37,8 @@ Before bumping any version, add a new entry to `CHANGELOG.md` for the release:
    ```
    git log <prev-tag>..HEAD --oneline
    ```
-   Group changes under `### Added`, `### Changed`, or `### Fixed` as appropriate.
-   Skip internal chores (formatting, todos, CI tweaks).
+   Group changes under `### Added`, `### Changed`, or `### Fixed` as appropriate. Skip internal chores (formatting,
+   todos, CI tweaks).
 3. Commit the changelog update together with the version bumps.
 
 ---
@@ -68,14 +68,13 @@ Rust crates are published manually by the user.
 
 ## JS Bindings
 
-The JS bindings are published through CI. The CI handles building native
-binaries for each target platform and publishing both the platform packages and
-the main package.
+The JS bindings are published through CI. The CI handles building native binaries for each target platform and
+publishing both the platform packages and the main package.
 
 ### Important: Manual Version Bump Required
 
-Before triggering the CI, two version fields in `js/package.json` must be
-updated **manually** — there is no automation for this step:
+Before triggering the CI, two version fields in `js/package.json` must be updated **manually** — there is no automation
+for this step:
 
 1. The top-level `"version"` field.
 2. All three versions in `"optionalDependencies"`, which must match `"version"`:
@@ -94,11 +93,9 @@ These correspond to the targets listed in `napi.targets`.
 
 1. **Bump `"version"`** in `js/package.json`.
 
-2. **Update `"optionalDependencies"`** in `js/package.json` to match the new
-   version (see above).
+2. **Update `"optionalDependencies"`** in `js/package.json` to match the new version (see above).
 
-3. **Trigger the CI** — the CI will build each platform binary and publish all
-   packages to NPM.
+3. **Trigger the CI** — the CI will build each platform binary and publish all packages to NPM.
 
 ### Verification
 
@@ -117,8 +114,8 @@ This should print `[ 'SpadeBox' ]` without errors.
 
 ## Python Bindings
 
-The Python bindings are published through CI via maturin. The CI builds wheels
-for each target platform and publishes them to PyPI.
+The Python bindings are published through CI via maturin. The CI builds wheels for each target platform and publishes
+them to PyPI.
 
 ### Important: Manual Version Bump Required
 

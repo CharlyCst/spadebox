@@ -22,4 +22,5 @@ test-only:
 lint:
     cargo fmt -- --check
     cargo clippy
-    cd js && deno lint
+    deno lint
+    deno fmt --check

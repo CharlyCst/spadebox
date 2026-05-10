@@ -34,7 +34,12 @@ export declare class SpadeBox {
    * `maxBytes` caps the number of bytes returned (default: 20 000). Pass `0` to disable.
    * Returns the file's content as a UTF-8 string.
    */
-  readFile(path: string, offset?: number | undefined | null, limit?: number | undefined | null, maxBytes?: number | undefined | null): Promise<string>
+  readFile(
+    path: string,
+    offset?: number | undefined | null,
+    limit?: number | undefined | null,
+    maxBytes?: number | undefined | null,
+  ): Promise<string>
   /**
    * Write text content to a file. Calls the `write_file` tool directly.
    *
@@ -104,7 +109,13 @@ export declare class SpadeBox {
    * Set `raw` to `true` to receive the raw response body unchanged.
    * `maxBytes` caps the number of bytes returned (default: 20 000). Pass `0` to disable.
    */
-  fetch(url: string, method: string, body?: string | undefined | null, raw?: boolean | undefined | null, maxBytes?: number | undefined | null): Promise<string>
+  fetch(
+    url: string,
+    method: string,
+    body?: string | undefined | null,
+    raw?: boolean | undefined | null,
+    maxBytes?: number | undefined | null,
+  ): Promise<string>
   /**
    * Enable the JavaScript tools. Returns `this` for chaining.
    *
@@ -141,7 +152,13 @@ export declare class SpadeBox {
    * (with no `dst`) to delete `src` instead of moving it.
    * Set `createDirs` to `true` to create any missing intermediate directories for the destination.
    */
-  move(src: string, dst?: string | undefined | null, overwrite?: boolean | undefined | null, del?: boolean | undefined | null, createDirs?: boolean | undefined | null): Promise<string>
+  move(
+    src: string,
+    dst?: string | undefined | null,
+    overwrite?: boolean | undefined | null,
+    del?: boolean | undefined | null,
+    createDirs?: boolean | undefined | null,
+  ): Promise<string>
   /**
    * Replace text within a file.
    *
