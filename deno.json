@@ -1,5 +1,8 @@
 {
-  "workspace": ["js/"],
+  "workspace": ["js/", "examples/mock_llm_server/"],
+  "tasks": {
+    "mock-server": "deno run --allow-net examples/mock_llm_server/mod.ts"
+  },
   "nodeModulesDir": "auto",
   "fmt": {
     "lineWidth": 120,

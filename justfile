@@ -24,3 +24,7 @@ lint:
     cargo clippy
     deno lint
     deno fmt --check
+
+# Start an OpenAI-compatible mock server
+mock-server:
+    deno task mock-server
