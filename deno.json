@@ -1,5 +1,5 @@
 {
-  "workspace": ["js/", "examples/mock_llm_server/"],
+  "workspace": ["js/", "examples/mock_llm_server/", "examples/js/"],
   "tasks": {
     "mock-server": "deno run --allow-net examples/mock_llm_server/mod.ts"
   },

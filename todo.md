@@ -21,6 +21,7 @@
       some reasonable default limit (how much? see
       https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-fetch-tool for claude's recommend limits)? Set
       to 0 to disable limit?
+- [ ] Make "GET" the default method, and make method optional.
 
 ## Grep
 
@@ -35,7 +36,7 @@
 
 ## JS Runtime
 
-- [ ] Add support for node API to read/write files. How to do that? Which API to support (sync/async)? Important: use
+- [X] Add support for node API to read/write files. How to do that? Which API to support (sync/async)? Important: use
       `cap-std` and the same sandbox as the other file tools.
 
 ## General
@@ -75,6 +76,3 @@ Check the following implementations:
 - Claude Code (see https://ccunpacked.dev/)
 - Claude API (see https://platform.claude.com/docs/en/agents-and-tools/tool-use/overview)
 
-## Other notes
-
-Pi seems to have a `ls` tool, do we also want something like that? Maybe glob is enough.
