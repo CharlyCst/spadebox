@@ -1,0 +1,10 @@
+[project]
+name = "spadebox-python-example"
+version = "0.1.0"
+requires-python = ">=3.9"
+dependencies = [
+    "spadebox",
+]
+
+[tool.uv.sources]
+spadebox = { path = "../../python" }

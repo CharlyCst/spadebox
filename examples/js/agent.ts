@@ -1,5 +1,5 @@
 /**
- * Todo list agent using any OpenAI-compatible chat completions API.
+ * Example agent using any OpenAI-compatible chat completions API.
  *
  * Usage:
  *   deno run --allow-read --allow-write --allow-env --allow-ffi --allow-net \
