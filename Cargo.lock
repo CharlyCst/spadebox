@@ -2378,6 +2378,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "spadebox"
+version = "0.4.0"
+dependencies = [
+ "serde_json",
+ "spadebox-core",
+ "tempfile",
+ "thiserror 2.0.18",
+ "tokio",
+]
+
+[[package]]
 name = "spadebox-cli"
 version = "0.4.0"
 dependencies = [

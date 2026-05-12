@@ -5,6 +5,7 @@ members = [
     "crates/spadebox-cli",
     "js",
     "python",
+    "rust",
 ]
 resolver = "2"
 

@@ -1,6 +1,6 @@
 ---
 name: maintain-docs
-description: Update all public-facing documentation after codebase changes (new tool, new parameter, new language binding). Covers spadebox-core, MCP server, JS bindings, Python bindings, and README.
+description: Update all public-facing documentation after codebase changes (new tool, new parameter, new language binding). Covers spadebox-core, MCP server, JS bindings, Python bindings, Rust bindings, and README.
 ---
 
 # Maintain Documentation
@@ -42,6 +42,9 @@ server and JSON schema both derive from them automatically — never duplicate t
 - **`python/src/lib.rs`** — PyO3 bindings. Contains hand-written doc comments for the `SpadeBox` class and each
   convenience method. These are surfaced directly as Python `help()` text and are **not** auto-derived from core; they
   must be updated manually. Use **snake_case** for all parameter and field references, matching Python conventions.
+- **`rust/src/lib.rs`** — Public Rust bindings. Contains hand-written doc comments for the `SpadeBox` struct and each
+  convenience method. These flow into `cargo doc` output and are **not** auto-derived from core; they must be updated
+  manually. Use **snake_case** for all parameter and field references, matching Rust conventions.
 - **`README.md`** — high-level overview listing available tools and usage examples for each interface. Shared across the
   repo root, `js/`, and `python/` via a symlink.
 
@@ -67,7 +70,12 @@ server and JSON schema both derive from them automatically — never duplicate t
    - Update the method's doc comment to mention the new parameter, using snake_case for its name.
    - Pass the new parameter through to the `Params` struct inside the method body.
 
-4. **No changes needed** in the MCP server, `js/index.d.ts`, or JSON Schema — they all update automatically on the next
+4. **`rust/src/lib.rs`**
+   - Update the corresponding convenience method signature (add the new parameter as `Option<T>` if it is optional).
+   - Update the method's doc comment to mention the new parameter, using snake_case for its name.
+   - Pass the new parameter through to the `Params` struct inside the method body.
+
+5. **No changes needed** in the MCP server, `js/index.d.ts`, or JSON Schema — they all update automatically on the next
    build.
 
 ### Changing a tool description
@@ -81,7 +89,10 @@ server and JSON schema both derive from them automatically — never duplicate t
 3. **`python/src/lib.rs`** — update the doc comment on the corresponding convenience method to stay consistent. Remember
    snake_case.
 
-4. **Regenerate the doc website tool pages** — from `website/` run `deno task generate`.
+4. **`rust/src/lib.rs`** — update the doc comment on the corresponding convenience method to stay consistent. Remember
+   snake_case.
+
+5. **Regenerate the doc website tool pages** — from `website/` run `deno task generate`.
 
 ### Adding a new tool
 
@@ -110,7 +121,11 @@ server and JSON schema both derive from them automatically — never duplicate t
      automatically — no extra registration needed.
    - Wrap async execution with `py.detach(|| { runtime.block_on(async { ... }) })`.
 
-6. **`README.md`** — add the new tool name to the tool list.
+6. **`rust/src/lib.rs`**
+   - Add a convenience method (`pub async fn <name>(...)`) with a clear doc comment using snake_case. The `tools()`
+     method calls `enabled_tools(&self.inner)` automatically — no extra registration needed.
+
+7. **`README.md`** — add the new tool name to the tool list.
 
 7. **Regenerate the doc website tool pages** — from the `website/` directory run:
    ```
