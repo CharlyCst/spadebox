@@ -36,7 +36,7 @@ use super::{Tool, glob::build_glob_set, glob::walk};
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GrepParams {
-    /// Regex pattern to search for (e.g. `"fn main"`, `"TODO.*fixme"`).
+    /// Regex pattern to search for (e.g. `"fn main"`, `"TODO.*fixme"`, `"(?i)path"`).
     pub pattern: String,
 
     /// Optional glob to restrict which files are searched

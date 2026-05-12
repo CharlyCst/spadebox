@@ -27,12 +27,14 @@
 
 - [x] Add support for base path (default to "/"). (the glob parameter handles that)
 - [x] Add support for case insensitivity. (no need to, the `(?i)` flag is sufficient)
+- [ ] Add support for limitting output size to N matches, where N is big enough but not too much (100?).
 
 ## Glob
 
 - [ ] Add an optional "depth" parameter to limit the depth of folder explored. Needs clarification: the depth should
       start at the first "**" pattern, are there special edge cases to take care of? Also, probably set a safe default,
       like 5?
+- [ ] Add a limit to the output size (with a reasonable but not too big default)
 
 ## JS Runtime
 
