@@ -81,7 +81,7 @@ server and JSON schema both derive from them automatically — never duplicate t
 3. **`python/src/lib.rs`** — update the doc comment on the corresponding convenience method to stay consistent. Remember
    snake_case.
 
-3. **Regenerate the doc website tool pages** — from `website/` run `deno task generate`.
+4. **Regenerate the doc website tool pages** — from `website/` run `deno task generate`.
 
 ### Adding a new tool
 
@@ -112,12 +112,12 @@ server and JSON schema both derive from them automatically — never duplicate t
 
 6. **`README.md`** — add the new tool name to the tool list.
 
-6. **Regenerate the doc website tool pages** — from the `website/` directory run:
+7. **Regenerate the doc website tool pages** — from the `website/` directory run:
    ```
    deno task generate
    ```
-   This calls the CLI for every tool and rewrites `website/docs/tools/<name>.md`.
-   The new tool's page is created automatically; no manual file editing needed.
+   This calls the CLI for every tool and rewrites `website/docs/tools/<name>.md`. The new tool's page is created
+   automatically; no manual file editing needed.
 
 ### Adding a new language binding (e.g. Python)
 

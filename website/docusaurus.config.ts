@@ -1,6 +1,6 @@
-import {themes as prismThemes} from 'prism-react-renderer';
-import type {Config} from '@docusaurus/types';
-import type * as Preset from '@docusaurus/preset-classic';
+import { themes as prismThemes } from 'prism-react-renderer'
+import type { Config } from '@docusaurus/types'
+import type * as Preset from '@docusaurus/preset-classic'
 
 const config: Config = {
   title: 'SpadeBox',
@@ -57,7 +57,7 @@ const config: Config = {
           position: 'left',
           label: 'Docs',
         },
-{
+        {
           href: 'https://github.com/CharlyCst/spadebox',
           label: 'GitHub',
           position: 'right',
@@ -106,6 +106,6 @@ const config: Config = {
       additionalLanguages: ['rust', 'toml', 'bash'],
     },
   } satisfies Preset.ThemeConfig,
-};
+}
 
-export default config;
+export default config
