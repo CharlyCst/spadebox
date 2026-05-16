@@ -446,42 +446,36 @@ impl SpadeBox {
         })
     }
 
-    /// Expose a Python callable as a JavaScript global function in the REPL session.
+    /// Expose a Python callable as a JavaScript global function.
     ///
     /// `name` is the JavaScript identifier the function will be available as.
     /// `func` is any Python callable; it receives JS arguments as strings and
-    /// must return a string (or raise an exception). The function can be called
-    /// from any subsequent `js_repl` call::
+    /// must return a string (or raise an exception). The function is available
+    /// in all subsequent `js_repl` calls and in every `js_exec` context::
     ///
     ///     sb = SpadeBox().enable_js()
     ///     sb.expose_js_func("add", lambda a, b: str(int(a) + int(b)))
     ///     result = sb.js_repl("add(1, 2)")  # "3"
     pub fn expose_js_func(
         &self,
-        py: Python<'_>,
+        _py: Python<'_>,
         name: String,
         func: Py<PyAny>,
     ) -> PyResult<()> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
-        py.detach(|| {
-            runtime.block_on(async move {
-                expose_js_func(&inner, name, move |args: Vec<String>| {
-                    Python::attach(|py| {
-                        let py_args: Vec<Py<PyAny>> = args
-                            .iter()
-                            .map(|s| s.clone().into_pyobject(py).unwrap().into())
-                            .collect();
-                        let tuple = PyTuple::new(py, py_args).unwrap();
-                        func.call1(py, tuple)
-                            .map(|r| r.to_string())
-                            .map_err(|e| e.to_string())
-                    })
-                })
-                .await
-                .map_err(to_py_err)
+        expose_js_func(&inner, name, move |args: Vec<String>| {
+            Python::attach(|py| {
+                let py_args: Vec<Py<PyAny>> = args
+                    .iter()
+                    .map(|s| s.clone().into_pyobject(py).unwrap().into())
+                    .collect();
+                let tuple = PyTuple::new(py, py_args).unwrap();
+                func.call1(py, tuple)
+                    .map(|r| r.to_string())
+                    .map_err(|e| e.to_string())
             })
         })
+        .map_err(to_py_err)
     }
 
     /// Evaluate JavaScript code and return the result as a string.

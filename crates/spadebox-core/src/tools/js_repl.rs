@@ -177,7 +177,6 @@ mod tests {
             let n: i64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(0);
             Ok((n * 3).to_string())
         })
-        .await
         .unwrap();
 
         let result = JsReplTool::run(&sandbox, JsReplParams { code: "triple(7)".into() })
@@ -193,7 +192,6 @@ mod tests {
             let name = args.first().cloned().unwrap_or_default();
             Ok(format!("hello, {name}"))
         })
-        .await
         .unwrap();
 
         JsReplTool::run(&sandbox, JsReplParams { code: "let g = greet('world')".into() })

@@ -209,20 +209,11 @@ impl FilesConfig {
 // JavaScript configuration
 // ---------------------------------------------------------------------------
 
-/// A message sent to the dedicated JS context thread.
-pub(crate) enum JsMessage {
-    /// Evaluate JavaScript source code and return the result.
-    Eval(
-        String,
-        tokio::sync::oneshot::Sender<ToolResult<crate::js_runtime::JsOutput>>,
-    ),
-    /// Register a native Rust function as a JavaScript global.
-    Register(
-        String,
-        Box<dyn Fn(Vec<String>) -> Result<String, String> + Send + 'static>,
-        tokio::sync::oneshot::Sender<()>,
-    ),
-}
+/// A request to evaluate JavaScript code, sent to the dedicated REPL thread.
+type JsEvalRequest = (
+    String,
+    tokio::sync::oneshot::Sender<ToolResult<crate::js_runtime::JsOutput>>,
+);
 
 /// Live handle to the dedicated JS REPL thread.
 ///
@@ -238,19 +229,37 @@ pub(crate) enum JsMessage {
 /// `std::sync::mpsc::Sender` because only the former is `Send + Sync`, which is
 /// required for `Sandbox` to be `Sync`.
 struct JsReplHandle {
-    tx: tokio::sync::mpsc::UnboundedSender<JsMessage>,
+    tx: tokio::sync::mpsc::UnboundedSender<JsEvalRequest>,
     /// Kept alive so the thread is joined on drop rather than detached.
     _thread: std::thread::JoinHandle<()>,
 }
 
+/// A native function stored in [`JsConfig::funcs`] and shared with JS contexts.
+pub(crate) type JsFunc =
+    Arc<dyn Fn(Vec<String>) -> Result<String, String> + Send + Sync + 'static>;
+
 /// Configuration and handle for the JavaScript tools.
-#[derive(Default)]
 pub struct JsConfig {
     /// `None` until first use of the JavaScript REPL.
     //
     //  TODO: on drop we will need to signal the REPL thread to shut down, but this would require
     //  support for interrupting Boa, which is not available yet.
     repl_handle: RwLock<Option<JsReplHandle>>,
+    /// Native functions registered via [`crate::expose_js_func`].
+    ///
+    /// Append-only. The REPL thread tracks a cursor and registers newly appended
+    /// functions before each evaluation. Fresh `js_exec` contexts register all
+    /// entries when they are constructed.
+    pub(crate) funcs: RwLock<Vec<(String, JsFunc)>>,
+}
+
+impl Default for JsConfig {
+    fn default() -> Self {
+        Self {
+            repl_handle: RwLock::new(None),
+            funcs: RwLock::new(Vec::new()),
+        }
+    }
 }
 
 impl JsConfig {
@@ -269,22 +278,24 @@ impl JsConfig {
             return; // Someone created the thread in between the drop and re-lock
         }
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsMessage>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsEvalRequest>();
         let thread = std::thread::spawn(move || {
-            let mut ctx = crate::js_runtime::JsContext::new(sandbox);
+            let mut ctx = crate::js_runtime::JsContext::new(Arc::clone(&sandbox));
+            let mut registered = 0usize;
             // `blocking_recv` parks this thread until a message arrives.
             // Loop exits when all senders are dropped (i.e., when `JsConfig` is
             // dropped), cleanly destroying the context.
-            while let Some(msg) = rx.blocking_recv() {
-                match msg {
-                    JsMessage::Eval(code, reply) => {
-                        let _ = reply.send(ctx.eval(&code));
+            while let Some((code, reply)) = rx.blocking_recv() {
+                // Register any functions appended since the last evaluation.
+                {
+                    let funcs = sandbox.js.funcs.read().unwrap();
+                    for (name, func) in &funcs[registered..] {
+                        let f = Arc::clone(func);
+                        ctx.register_func(name, Box::new(move |args| f(args)));
                     }
-                    JsMessage::Register(name, func, reply) => {
-                        ctx.register_func(&name, func);
-                        let _ = reply.send(());
-                    }
+                    registered = funcs.len();
                 }
+                let _ = reply.send(ctx.eval(&code));
             }
         });
         *handle = Some(JsReplHandle {
@@ -309,7 +320,7 @@ impl JsConfig {
                 .as_ref()
                 .expect("init_repl_handle guarantees Some")
                 .tx;
-            tx.send(JsMessage::Eval(code, reply_tx))
+            tx.send((code, reply_tx))
                 .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?;
         }
 
@@ -319,32 +330,12 @@ impl JsConfig {
             .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?
     }
 
-    /// Registers a native Rust function as a JavaScript global in the REPL session.
+    /// Appends `func` to the shared function table under `name`.
     ///
-    /// Initialises the JS thread if it has not been started yet. The function is
-    /// available in all subsequent `repl_eval` calls.
-    pub(crate) async fn expose_js_func(
-        &self,
-        sandbox: Arc<Sandbox>,
-        name: String,
-        func: Box<dyn Fn(Vec<String>) -> Result<String, String> + Send + 'static>,
-    ) -> ToolResult<()> {
-        self.init_repl_handle(sandbox);
-        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
-
-        {
-            let handle = self.repl_handle.read().unwrap();
-            let tx = &handle
-                .as_ref()
-                .expect("init_repl_handle guarantees Some")
-                .tx;
-            tx.send(JsMessage::Register(name, func, reply_tx))
-                .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?;
-        }
-
-        reply_rx
-            .await
-            .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))
+    /// The REPL thread picks up new entries before each evaluation; fresh
+    /// `js_exec` contexts register all entries on construction.
+    pub(crate) fn expose_js_func(&self, name: String, func: JsFunc) {
+        self.funcs.write().unwrap().push((name, func));
     }
 }
 

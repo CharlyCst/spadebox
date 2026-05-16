@@ -3,9 +3,8 @@
 // the JavaScript calling convention (NAPI-RS converts snake_case identifiers to
 // camelCase in the generated bindings).
 
-use napi::bindgen_prelude::{execute_tokio_future_with_finalize_callback, Function, This};
+use napi::bindgen_prelude::{Function, This};
 use napi::threadsafe_function::{ThreadsafeFunctionCallMode, ThreadsafeCallContext};
-use napi::Env;
 use napi_derive::napi;
 use spadebox_core::{
   DomainRule, HttpVerb, Sandbox, enabled_tools,
@@ -299,16 +298,15 @@ impl SpadeBox {
     this
   }
 
-  /// Expose a Node.js function as a global in the Boa REPL session.
+  /// Expose a Node.js function as a global in the Boa JavaScript runtime.
   ///
   /// `name` is the identifier the function will be callable as from `jsRepl` / `jsExec`.
   /// `func` receives JS arguments as an array of strings and must return a string.
-  ///
-  /// Returns a Promise that resolves once the function is registered.
+  /// The function is available in all subsequent `jsRepl` calls and in every `jsExec` context.
   ///
   /// ```js
   /// const sb = new SpadeBox().enableJs();
-  /// await sb.exposeJsFunc("add", (args) => String(Number(args[0]) + Number(args[1])));
+  /// sb.exposeJsFunc("add", (args) => String(Number(args[0]) + Number(args[1])));
   /// const result = await sb.jsRepl("add(1, 2)"); // '"3"'
   /// ```
   #[napi]
@@ -316,20 +314,19 @@ impl SpadeBox {
     &self,
     name: String,
     func: Function<'_, (Vec<String>,), String>,
-    env: &Env,
-  ) -> napi::Result<napi::sys::napi_value> {
-    // Build a Send + 'static threadsafe handle synchronously, before spawning
-    // the async registration task. This avoids capturing the non-Send `func`
-    // value into the async future.
+  ) -> napi::Result<()> {
+    // Build a Send + Sync threadsafe handle so the closure can be stored and
+    // called from the Boa thread (which is separate from the Node.js event loop).
     let tsfn = func
       .build_threadsafe_function::<Vec<String>>()
       .build_callback(|ctx: ThreadsafeCallContext<Vec<String>>| Ok((ctx.value,)))?;
 
     let inner = Arc::clone(&self.inner);
 
-    // Wrap the threadsafe function in a blocking Rust closure for the Boa thread.
-    // When Boa calls this closure, it posts to the Node.js event loop and blocks
-    // until the result arrives via a sync channel.
+    // When Boa calls this closure it posts to the Node.js event loop and blocks
+    // until the result arrives via a sync channel. This works without deadlock
+    // because `jsRepl().await` has already suspended the tokio task, freeing
+    // the event loop to process the callback.
     let callback = move |args: Vec<String>| -> Result<String, String> {
       let (tx, rx) = std::sync::mpsc::channel::<napi::Result<String>>();
       tsfn.call_with_return_value(
@@ -345,17 +342,7 @@ impl SpadeBox {
         .map_err(|e| e.to_string())
     };
 
-    // Spawn the async registration on the tokio runtime and return a raw Promise.
-    execute_tokio_future_with_finalize_callback(
-      env.raw(),
-      async move {
-        spadebox_core::expose_js_func(&inner, name, callback)
-          .await
-          .map_err(to_napi_err)
-      },
-      |env, _: ()| unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(env, ()) },
-      None,
-    )
+    spadebox_core::expose_js_func(&inner, name, callback).map_err(to_napi_err)
   }
 
   /// Evaluate JavaScript code and return the result as a string.

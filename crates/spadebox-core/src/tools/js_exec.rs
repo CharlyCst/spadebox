@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::sync::Arc;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -51,7 +52,15 @@ impl Tool for JsExecTool {
             let mut code = String::new();
             file.read_to_string(&mut code).map_err(ToolError::IoError)?;
 
-            let mut ctx = JsContext::new(sandbox);
+            let mut ctx = JsContext::new(Arc::clone(&sandbox));
+            // Register all functions exposed via `expose_js_func`.
+            {
+                let funcs = sandbox.js.funcs.read().unwrap();
+                for (name, func) in funcs.iter() {
+                    let f = Arc::clone(func);
+                    ctx.register_func(name, Box::new(move |args| f(args)));
+                }
+            }
             ctx.eval(&code).map(|output| output.console.join("\n"))
         })
         .await
@@ -201,5 +210,30 @@ mod tests {
         .await
         .unwrap_err();
         assert!(matches!(err, ToolError::PermissionDenied(_)));
+    }
+
+    #[tokio::test]
+    async fn exposed_func_available_in_exec() {
+        let (dir, sandbox) = setup();
+        crate::expose_js_func(&sandbox, "double", |args| {
+            let n: i64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(0);
+            Ok((n * 2).to_string())
+        })
+        .unwrap();
+
+        std::fs::write(
+            dir.path().join("use_double.js"),
+            r#"var r = double(21); if (r !== "42") throw new Error("got " + r);"#,
+        )
+        .unwrap();
+
+        JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "use_double.js".into(),
+            },
+        )
+        .await
+        .unwrap();
     }
 }
