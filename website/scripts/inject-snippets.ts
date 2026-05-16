@@ -13,7 +13,7 @@
  *   ```
  *   {/* /snippet *\/}
  */
-import { dirname, extname, join } from 'jsr:@std/path'
+import { dirname, extname, join } from '@std/path'
 
 const SCRIPT_DIR = dirname(import.meta.filename!)
 const DOCS_DIR = join(SCRIPT_DIR, '..', 'docs')

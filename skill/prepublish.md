@@ -7,11 +7,11 @@ description: Step-by-step checklist for publishing a new version of Spadebox to 
 
 This skill covers publishing the Rust crates, JS bindings, and Python bindings.
 
-| Package                                                                         | Published by   | How                                 |
-| ------------------------------------------------------------------------------- | -------------- | ----------------------------------- |
-| Rust crates (`spadebox`, `spadebox-core`, `spadebox-mcp`, `spadebox-cli`)       | User, manually | `cargo publish`                     |
-| JS bindings (`@spadebox/spadebox`)                                              | CI             | Triggered automatically on tag push |
-| Python bindings (`spadebox`)                                                    | CI             | Triggered automatically on tag push |
+| Package                                                                   | Published by   | How                                 |
+| ------------------------------------------------------------------------- | -------------- | ----------------------------------- |
+| Rust crates (`spadebox`, `spadebox-core`, `spadebox-mcp`, `spadebox-cli`) | User, manually | `cargo publish`                     |
+| JS bindings (`@spadebox/spadebox`)                                        | CI             | Triggered automatically on tag push |
+| Python bindings (`spadebox`)                                              | CI             | Triggered automatically on tag push |
 
 ---
 

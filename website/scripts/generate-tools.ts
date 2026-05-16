@@ -1,4 +1,4 @@
-import { dirname, join } from 'jsr:@std/path'
+import { dirname, join } from '@std/path'
 
 const SCRIPT_DIR = dirname(import.meta.filename!)
 const WORKSPACE_ROOT = join(SCRIPT_DIR, '..', '..')

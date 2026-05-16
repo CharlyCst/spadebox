@@ -104,7 +104,9 @@ async fn chat(
         anyhow::bail!("API error {status}: {text}");
     }
     let data: Value = res.json().await?;
-    Ok(serde_json::from_value(data["choices"][0]["message"].clone())?)
+    Ok(serde_json::from_value(
+        data["choices"][0]["message"].clone(),
+    )?)
 }
 
 // --- Agent loop ---
@@ -127,7 +129,11 @@ async fn run_turn(
         let calls = match tool_calls {
             Some(calls) if !calls.is_empty() => calls,
             _ => {
-                if let Message::Assistant { content: Some(text), .. } = response {
+                if let Message::Assistant {
+                    content: Some(text),
+                    ..
+                } = response
+                {
                     println!("\n{CYAN}Agent:{RESET} {text}\n");
                 }
                 return Ok(());
@@ -140,7 +146,11 @@ async fn run_turn(
             println!("\n{BLUE}[call]{RESET} {GRAY}{name}({args}){RESET}");
 
             let result = sb.call_tool(name, args).await?;
-            let tag = if result.is_error { format!("{RED}[error]{RESET}") } else { format!("{GREEN}[ok]{RESET}") };
+            let tag = if result.is_error {
+                format!("{RED}[error]{RESET}")
+            } else {
+                format!("{GREEN}[ok]{RESET}")
+            };
             println!("{tag} {GRAY}{}{RESET}", result.output);
 
             messages.push(Message::Tool {
