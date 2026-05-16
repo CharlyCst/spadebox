@@ -92,7 +92,7 @@ server and JSON schema both derive from them automatically — never duplicate t
 4. **`rust/src/lib.rs`** — update the doc comment on the corresponding convenience method to stay consistent. Remember
    snake_case.
 
-5. **Regenerate the doc website tool pages** — from `website/` run `deno task generate`.
+5. **Regenerate the doc website tool pages** — from the root run `deno task website:update`.
 
 ### Adding a new tool
 
@@ -127,7 +127,7 @@ server and JSON schema both derive from them automatically — never duplicate t
 
 7. **`README.md`** — add the new tool name to the tool list.
 
-7. **Regenerate the doc website tool pages** — from the `website/` directory run:
+8. **Regenerate the doc website tool pages** — from the `website/` directory run:
    ```
    deno task generate
    ```

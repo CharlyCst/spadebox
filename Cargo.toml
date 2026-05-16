@@ -1,11 +1,17 @@
 [workspace]
 members = [
-    "crates/spadebox-core",
-    "crates/spadebox-mcp",
-    "crates/spadebox-cli",
+    # Public interfaces
     "js",
     "python",
     "rust",
+
+    # Internal crates
+    "crates/spadebox-core",
+    "crates/spadebox-mcp",
+    "crates/spadebox-cli",
+
+    # Tests and examples
+    "examples/rust",
 ]
 resolver = "2"
 
