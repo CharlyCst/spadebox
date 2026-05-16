@@ -56,9 +56,9 @@ impl Tool for JsExecTool {
             // Register all functions exposed via `expose_js_func`.
             {
                 let funcs = sandbox.js.funcs.read().unwrap();
-                for (name, func) in funcs.iter() {
+                for (name, params, func) in funcs.iter() {
                     let f = Arc::clone(func);
-                    ctx.register_func(name, Box::new(move |args| f(args)));
+                    ctx.register_func(name, params, Box::new(move |args| f(args)));
                 }
             }
             ctx.eval(&code).map(|output| output.console.join("\n"))
@@ -215,15 +215,15 @@ mod tests {
     #[tokio::test]
     async fn exposed_func_available_in_exec() {
         let (dir, sandbox) = setup();
-        crate::expose_js_func(&sandbox, "double", |args| {
-            let n: i64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(0);
-            Ok((n * 2).to_string())
+        crate::expose_js_func(&sandbox, "double", ["n"], |args| {
+            let n = args.get("n").and_then(|v| v.as_i64()).unwrap_or(0);
+            Ok(serde_json::Value::Number((n * 2).into()))
         })
         .unwrap();
 
         std::fs::write(
             dir.path().join("use_double.js"),
-            r#"var r = double(21); if (r !== "42") throw new Error("got " + r);"#,
+            r#"var r = double(21); if (r !== 42) throw new Error("got " + r);"#,
         )
         .unwrap();
 

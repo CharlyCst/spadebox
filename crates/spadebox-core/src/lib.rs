@@ -12,10 +12,11 @@ pub use tools::{Tool, ToolDef, call_tool, enabled_tools};
 /// Registers a native function as a JavaScript global, available to both the
 /// persistent REPL session and fresh `js_exec` contexts.
 ///
-/// The function is callable by name from any subsequent `js_repl` or `js_exec`
-/// call. Arguments passed from JavaScript are converted to strings; the return
-/// value is converted back to a JS string, or a JS `Error` is thrown if the
-/// closure returns `Err`.
+/// `params` declares the positional parameter names. When the function is called
+/// from JavaScript, positional arguments are mapped to a JSON object
+/// `{ "paramName": value, … }` and passed to `func`. The return value is
+/// converted back to a JS value, or a JS `Error` is thrown if `func` returns
+/// `Err`.
 ///
 /// Returns [`ToolError::PermissionDenied`] if JavaScript has not been enabled.
 ///
@@ -26,22 +27,24 @@ pub use tools::{Tool, ToolDef, call_tool, enabled_tools};
 /// # use spadebox_core::{Sandbox, expose_js_func};
 /// let sandbox = Arc::new(Sandbox::new());
 /// sandbox.enable_js();
-/// expose_js_func(&sandbox, "add", |args| {
-///     let a: i64 = args.get(0).and_then(|s| s.parse().ok()).unwrap_or(0);
-///     let b: i64 = args.get(1).and_then(|s| s.parse().ok()).unwrap_or(0);
-///     Ok((a + b).to_string())
+/// expose_js_func(&sandbox, "add", ["a", "b"], |args| {
+///     let a = args["a"].as_i64().unwrap_or(0);
+///     let b = args["b"].as_i64().unwrap_or(0);
+///     Ok(serde_json::Value::Number((a + b).into()))
 /// }).unwrap();
 /// ```
 pub fn expose_js_func(
     sandbox: impl AsArc<Sandbox>,
     name: impl Into<String>,
-    func: impl Fn(Vec<String>) -> Result<String, String> + Send + Sync + 'static,
+    params: impl IntoIterator<Item = impl Into<String>>,
+    func: impl Fn(serde_json::Value) -> Result<serde_json::Value, String> + Send + Sync + 'static,
 ) -> ToolResult<()> {
     let sandbox = sandbox.as_arc();
     if !sandbox.js_is_enabled() {
         return Err(ToolError::PermissionDenied("JS is disabled".to_string()));
     }
-    sandbox.js.expose_js_func(name.into(), Arc::new(func));
+    let params: Vec<String> = params.into_iter().map(Into::into).collect();
+    sandbox.js.expose_js_func(name.into(), params, Arc::new(func));
     Ok(())
 }
 

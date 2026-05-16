@@ -449,32 +449,51 @@ impl SpadeBox {
     /// Expose a Python callable as a JavaScript global function.
     ///
     /// `name` is the JavaScript identifier the function will be available as.
-    /// `func` is any Python callable; it receives JS arguments as strings and
-    /// must return a string (or raise an exception). The function is available
-    /// in all subsequent `js_repl` calls and in every `js_exec` context::
+    /// `params` declares the parameter names in order. JS positional arguments
+    /// are mapped to a Python dict ``{"paramName": value, ...}`` and passed to
+    /// `func`. `func` must return a JSON-serialisable value. The function is
+    /// available in all subsequent `js_repl` calls and in every `js_exec`
+    /// context::
     ///
     ///     sb = SpadeBox().enable_js()
-    ///     sb.expose_js_func("add", lambda a, b: str(int(a) + int(b)))
+    ///     sb.expose_js_func("add", ["a", "b"], lambda args: args["a"] + args["b"])
     ///     result = sb.js_repl("add(1, 2)")  # "3"
     pub fn expose_js_func(
         &self,
         _py: Python<'_>,
         name: String,
+        params: Vec<String>,
         func: Py<PyAny>,
     ) -> PyResult<()> {
         let inner = Arc::clone(&self.inner);
-        expose_js_func(&inner, name, move |args: Vec<String>| {
-            Python::attach(|py| {
-                let py_args: Vec<Py<PyAny>> = args
-                    .iter()
-                    .map(|s| s.clone().into_pyobject(py).unwrap().into())
-                    .collect();
-                let tuple = PyTuple::new(py, py_args).unwrap();
-                func.call1(py, tuple)
-                    .map(|r| r.to_string())
-                    .map_err(|e| e.to_string())
-            })
-        })
+        expose_js_func(
+            &inner,
+            name,
+            params,
+            move |args: serde_json::Value| -> Result<serde_json::Value, String> {
+                Python::attach(|py| {
+                    // Deserialise args JSON into a Python dict via json.loads.
+                    let json_str = serde_json::to_string(&args).map_err(|e| e.to_string())?;
+                    let json_mod = py.import("json").map_err(|e: PyErr| e.to_string())?;
+                    let py_args = json_mod
+                        .call_method1("loads", (json_str,))
+                        .map_err(|e: PyErr| e.to_string())?;
+
+                    // Call the user's Python function with the dict.
+                    let tuple = PyTuple::new(py, [py_args]).unwrap();
+                    let result = func.call1(py, tuple).map_err(|e: PyErr| e.to_string())?;
+
+                    // Serialise the return value back to JSON via json.dumps.
+                    let result_str: String = json_mod
+                        .call_method1("dumps", (result.bind(py),))
+                        .map_err(|e: PyErr| e.to_string())?
+                        .extract()
+                        .map_err(|e: PyErr| e.to_string())?;
+
+                    serde_json::from_str(&result_str).map_err(|e| e.to_string())
+                })
+            },
+        )
         .map_err(to_py_err)
     }
 

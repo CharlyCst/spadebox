@@ -236,7 +236,7 @@ struct JsReplHandle {
 
 /// A native function stored in [`JsConfig::funcs`] and shared with JS contexts.
 pub(crate) type JsFunc =
-    Arc<dyn Fn(Vec<String>) -> Result<String, String> + Send + Sync + 'static>;
+    Arc<dyn Fn(serde_json::Value) -> Result<serde_json::Value, String> + Send + Sync + 'static>;
 
 /// Configuration and handle for the JavaScript tools.
 pub struct JsConfig {
@@ -250,7 +250,11 @@ pub struct JsConfig {
     /// Append-only. The REPL thread tracks a cursor and registers newly appended
     /// functions before each evaluation. Fresh `js_exec` contexts register all
     /// entries when they are constructed.
-    pub(crate) funcs: RwLock<Vec<(String, JsFunc)>>,
+    ///
+    /// Each entry is `(name, params, func)` where `params` lists the positional
+    /// parameter names. The runtime maps JS positional arguments to a JSON object
+    /// `{ paramName: value, ... }` before calling `func`.
+    pub(crate) funcs: RwLock<Vec<(String, Vec<String>, JsFunc)>>,
 }
 
 impl Default for JsConfig {
@@ -289,9 +293,9 @@ impl JsConfig {
                 // Register any functions appended since the last evaluation.
                 {
                     let funcs = sandbox.js.funcs.read().unwrap();
-                    for (name, func) in &funcs[registered..] {
+                    for (name, params, func) in &funcs[registered..] {
                         let f = Arc::clone(func);
-                        ctx.register_func(name, Box::new(move |args| f(args)));
+                        ctx.register_func(name, params, Box::new(move |args| f(args)));
                     }
                     registered = funcs.len();
                 }
@@ -334,8 +338,8 @@ impl JsConfig {
     ///
     /// The REPL thread picks up new entries before each evaluation; fresh
     /// `js_exec` contexts register all entries on construction.
-    pub(crate) fn expose_js_func(&self, name: String, func: JsFunc) {
-        self.funcs.write().unwrap().push((name, func));
+    pub(crate) fn expose_js_func(&self, name: String, params: Vec<String>, func: JsFunc) {
+        self.funcs.write().unwrap().push((name, params, func));
     }
 }
 

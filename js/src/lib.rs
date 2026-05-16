@@ -3,7 +3,7 @@
 // the JavaScript calling convention (NAPI-RS converts snake_case identifiers to
 // camelCase in the generated bindings).
 
-use napi::bindgen_prelude::{Function, This};
+use napi::bindgen_prelude::{FromNapiValue, Function, This, ToNapiValue};
 use napi::threadsafe_function::{ThreadsafeFunctionCallMode, ThreadsafeCallContext};
 use napi_derive::napi;
 use spadebox_core::{
@@ -18,6 +18,34 @@ use std::sync::Arc;
 
 fn to_napi_err(e: spadebox_core::ToolError) -> napi::Error {
   napi::Error::from_reason(e.to_string())
+}
+
+/// Wrapper around `serde_json::Value` that implements `ToNapiValue` /
+/// `FromNapiValue` via the napi `serde-json` feature's `Env::to_js_value` /
+/// `Env::from_js_value` helpers.
+struct JsonValue(serde_json::Value);
+
+impl ToNapiValue for JsonValue {
+  unsafe fn to_napi_value(
+    raw_env: napi::sys::napi_env,
+    val: Self,
+  ) -> napi::Result<napi::sys::napi_value> {
+    let env = napi::Env::from_raw(raw_env);
+    let js_unknown = env.to_js_value(&val.0)?;
+    unsafe { ToNapiValue::to_napi_value(raw_env, js_unknown) }
+  }
+}
+
+impl FromNapiValue for JsonValue {
+  unsafe fn from_napi_value(
+    raw_env: napi::sys::napi_env,
+    napi_val: napi::sys::napi_value,
+  ) -> napi::Result<Self> {
+    let env = napi::Env::from_raw(raw_env);
+    let unknown = unsafe { napi::Unknown::from_napi_value(raw_env, napi_val)? };
+    let val: serde_json::Value = env.from_js_value(unknown)?;
+    Ok(JsonValue(val))
+  }
 }
 
 /// Tool metadata exposed to JavaScript.
@@ -301,25 +329,29 @@ impl SpadeBox {
   /// Expose a Node.js function as a global in the Boa JavaScript runtime.
   ///
   /// `name` is the identifier the function will be callable as from `jsRepl` / `jsExec`.
-  /// `func` receives JS arguments as an array of strings and must return a string.
+  /// `params` declares the parameter names in order. JS positional arguments are
+  /// mapped to a JavaScript object `{ paramName: value, ... }` and passed to `func`.
+  /// `func` receives this object and must return a JSON-compatible value.
   /// The function is available in all subsequent `jsRepl` calls and in every `jsExec` context.
   ///
   /// ```js
   /// const sb = new SpadeBox().enableJs();
-  /// sb.exposeJsFunc("add", (args) => String(Number(args[0]) + Number(args[1])));
-  /// const result = await sb.jsRepl("add(1, 2)"); // '"3"'
+  /// sb.exposeJsFunc("add", ["a", "b"], ({a, b}) => a + b);
+  /// const result = await sb.jsRepl("add(1, 2)"); // '3'
   /// ```
-  #[napi]
+  #[allow(private_interfaces)]
+  #[napi(ts_args_type = "name: string, params: string[], func: (args: Record<string, unknown>) => unknown")]
   pub fn expose_js_func(
     &self,
     name: String,
-    func: Function<'_, (Vec<String>,), String>,
+    params: Vec<String>,
+    func: Function<'_, (JsonValue,), JsonValue>,
   ) -> napi::Result<()> {
     // Build a Send + Sync threadsafe handle so the closure can be stored and
     // called from the Boa thread (which is separate from the Node.js event loop).
     let tsfn = func
-      .build_threadsafe_function::<Vec<String>>()
-      .build_callback(|ctx: ThreadsafeCallContext<Vec<String>>| Ok((ctx.value,)))?;
+      .build_threadsafe_function::<serde_json::Value>()
+      .build_callback(|ctx: ThreadsafeCallContext<serde_json::Value>| Ok((JsonValue(ctx.value),)))?;
 
     let inner = Arc::clone(&self.inner);
 
@@ -327,12 +359,12 @@ impl SpadeBox {
     // until the result arrives via a sync channel. This works without deadlock
     // because `jsRepl().await` has already suspended the tokio task, freeing
     // the event loop to process the callback.
-    let callback = move |args: Vec<String>| -> Result<String, String> {
-      let (tx, rx) = std::sync::mpsc::channel::<napi::Result<String>>();
+    let callback = move |args: serde_json::Value| -> Result<serde_json::Value, String> {
+      let (tx, rx) = std::sync::mpsc::channel::<napi::Result<JsonValue>>();
       tsfn.call_with_return_value(
         args,
         ThreadsafeFunctionCallMode::NonBlocking,
-        move |result: napi::Result<String>, _env| {
+        move |result: napi::Result<JsonValue>, _env| {
           let _ = tx.send(result);
           Ok(())
         },
@@ -340,9 +372,10 @@ impl SpadeBox {
       rx.recv()
         .map_err(|_| "JS callback channel disconnected".to_string())?
         .map_err(|e| e.to_string())
+        .map(|v| v.0)
     };
 
-    spadebox_core::expose_js_func(&inner, name, callback).map_err(to_napi_err)
+    spadebox_core::expose_js_func(&inner, name, params, callback).map_err(to_napi_err)
   }
 
   /// Evaluate JavaScript code and return the result as a string.

@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-use boa_engine::{Context, JsNativeError, JsValue, NativeFunction, Source, js_string};
+use boa_engine::{Context, JsNativeError, JsValue, NativeFunction, Source, js_string, property::PropertyKey};
 
 use crate::{Sandbox, ToolError, ToolResult};
 
@@ -58,29 +58,32 @@ impl JsContext {
 
     /// Registers `func` as a synchronous JavaScript global named `name`.
     ///
-    /// JS arguments are converted to strings via `display()` and passed to `func`.
-    /// The return value is converted back to a JS string, or a JS `Error` is thrown
+    /// JS positional arguments are mapped to a JSON object `{ paramName: value, ... }`
+    /// using `params` as the ordered key list, then passed to `func`.
+    /// The return value is converted back to a `JsValue`, or a JS `Error` is thrown
     /// if `func` returns `Err`.
     pub fn register_func(
         &mut self,
         name: &str,
-        func: Box<dyn Fn(Vec<String>) -> Result<String, String> + 'static>,
+        params: &[String],
+        func: Box<dyn Fn(serde_json::Value) -> Result<serde_json::Value, String> + 'static>,
     ) {
         let native = NativeFunction::from_copy_closure_with_captures(
             |_this, args, captures, ctx| {
-                let str_args: Vec<String> = args
-                    .iter()
-                    .map(|v| {
-                        v.to_string(ctx)
-                            .map(|s| s.to_std_string_lossy())
-                            .unwrap_or_else(|_| v.display().to_string())
-                    })
-                    .collect();
-                (captures.func)(str_args)
-                    .map(|s| JsValue::from(js_string!(s.as_str())))
-                    .map_err(|e| JsNativeError::error().with_message(e).into())
+                let mut map = serde_json::Map::new();
+                for (i, param) in captures.params.iter().enumerate() {
+                    let js_val = args.get(i).cloned().unwrap_or_else(JsValue::undefined);
+                    map.insert(param.clone(), js_to_json(&js_val, ctx));
+                }
+                let json_args = serde_json::Value::Object(map);
+                let result = (captures.func)(json_args)
+                    .map_err(|e| JsNativeError::error().with_message(e))?;
+                Ok(json_to_js_value(&result, ctx))
             },
-            UserFuncCaptures { func },
+            UserFuncCaptures {
+                params: params.to_vec(),
+                func,
+            },
         );
         self.ctx
             .register_global_callable(js_string!(name), 0, native)
@@ -126,7 +129,8 @@ unsafe impl boa_engine::gc::Trace for SandboxCaptures {
 ///
 /// The boxed closure contains no GC-managed values, so trace is a no-op.
 struct UserFuncCaptures {
-    func: Box<dyn Fn(Vec<String>) -> Result<String, String> + 'static>,
+    params: Vec<String>,
+    func: Box<dyn Fn(serde_json::Value) -> Result<serde_json::Value, String> + 'static>,
 }
 
 impl boa_engine::gc::Finalize for UserFuncCaptures {}
@@ -134,6 +138,85 @@ impl boa_engine::gc::Finalize for UserFuncCaptures {}
 // SAFETY: The closure holds no GC-managed objects; nothing to trace.
 unsafe impl boa_engine::gc::Trace for UserFuncCaptures {
     boa_engine::gc::empty_trace!();
+}
+
+// ---------------------------------------------------------------------------
+// JSON <-> JsValue conversion helpers
+// ---------------------------------------------------------------------------
+
+/// Converts a `JsValue` to the nearest `serde_json::Value` representation.
+///
+/// Objects and arrays are converted recursively. Symbols, BigInts, and other
+/// non-JSON values become `null`.
+fn js_to_json(val: &JsValue, ctx: &mut Context) -> serde_json::Value {
+    if val.is_null() || val.is_undefined() {
+        return serde_json::Value::Null;
+    }
+    if let Some(b) = val.as_boolean() {
+        return serde_json::Value::Bool(b);
+    }
+    if let Some(n) = val.as_number() {
+        return if n.is_finite() {
+            if n.fract() == 0.0 && n >= i64::MIN as f64 && n <= i64::MAX as f64 {
+                serde_json::Value::Number((n as i64).into())
+            } else {
+                serde_json::Number::from_f64(n)
+                    .map(serde_json::Value::Number)
+                    .unwrap_or(serde_json::Value::Null)
+            }
+        } else {
+            serde_json::Value::Null
+        };
+    }
+    if let Some(s) = val.as_string() {
+        return serde_json::Value::String(s.to_std_string_lossy());
+    }
+    if let Some(obj) = val.as_object() {
+        if obj.is_array() {
+            let len = obj
+                .get(js_string!("length"), ctx)
+                .ok()
+                .and_then(|v| v.as_number())
+                .unwrap_or(0.0) as usize;
+            let mut arr = Vec::with_capacity(len);
+            for i in 0..len {
+                let elem = obj
+                    .get(i as u32, ctx)
+                    .unwrap_or_else(|_| JsValue::undefined());
+                arr.push(js_to_json(&elem, ctx));
+            }
+            return serde_json::Value::Array(arr);
+        }
+        let keys = obj.own_property_keys(ctx).unwrap_or_default();
+        let mut map = serde_json::Map::new();
+        for key in keys {
+            match key {
+                PropertyKey::String(s) => {
+                    let k = s.to_std_string_lossy();
+                    let v = obj
+                        .get(js_string!(k.as_str()), ctx)
+                        .unwrap_or_else(|_| JsValue::undefined());
+                    map.insert(k, js_to_json(&v, ctx));
+                }
+                PropertyKey::Index(idx) => {
+                    let k = idx.get().to_string();
+                    let v = obj
+                        .get(PropertyKey::Index(idx), ctx)
+                        .unwrap_or_else(|_| JsValue::undefined());
+                    map.insert(k, js_to_json(&v, ctx));
+                }
+                PropertyKey::Symbol(_) => {}
+            }
+        }
+        return serde_json::Value::Object(map);
+    }
+    serde_json::Value::Null
+}
+
+/// Converts a `serde_json::Value` to a `JsValue` using Boa's built-in
+/// `from_json` conversion. Does not call `ctx.eval()`.
+fn json_to_js_value(val: &serde_json::Value, ctx: &mut Context) -> JsValue {
+    JsValue::from_json(val, ctx).unwrap_or_else(|_| JsValue::null())
 }
 
 // ---------------------------------------------------------------------------
@@ -155,12 +238,13 @@ mod tests {
         let mut ctx = ctx();
         ctx.register_func(
             "double",
+            &["n".to_string()],
             Box::new(|args| {
-                let n: i64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(0);
-                Ok((n * 2).to_string())
+                let n: i64 = args.get("n").and_then(|v| v.as_i64()).unwrap_or(0);
+                Ok(serde_json::Value::Number((n * 2).into()))
             }),
         );
-        assert_eq!(ctx.eval("double(21)").unwrap().value, "\"42\"");
+        assert_eq!(ctx.eval("double(21)").unwrap().value, "42");
     }
 
     #[test]
@@ -168,6 +252,7 @@ mod tests {
         let mut ctx = ctx();
         ctx.register_func(
             "fail",
+            &[],
             Box::new(|_| Err("something went wrong".to_string())),
         );
         let err = ctx.eval("fail()").unwrap_err().to_string();

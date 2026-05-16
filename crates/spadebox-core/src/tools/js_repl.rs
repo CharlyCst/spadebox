@@ -173,24 +173,28 @@ mod tests {
     #[tokio::test]
     async fn exposed_func_callable_from_repl() {
         let sandbox = js_sandbox();
-        crate::expose_js_func(&sandbox, "triple", |args| {
-            let n: i64 = args.first().and_then(|s| s.parse().ok()).unwrap_or(0);
-            Ok((n * 3).to_string())
+        crate::expose_js_func(&sandbox, "triple", ["n"], |args| {
+            let n = args.get("n").and_then(|v| v.as_i64()).unwrap_or(0);
+            Ok(serde_json::Value::Number((n * 3).into()))
         })
         .unwrap();
 
         let result = JsReplTool::run(&sandbox, JsReplParams { code: "triple(7)".into() })
             .await
             .unwrap();
-        assert_eq!(result, "\"21\"");
+        assert_eq!(result, "21");
     }
 
     #[tokio::test]
     async fn exposed_func_persists_across_repl_calls() {
         let sandbox = js_sandbox();
-        crate::expose_js_func(&sandbox, "greet", |args| {
-            let name = args.first().cloned().unwrap_or_default();
-            Ok(format!("hello, {name}"))
+        crate::expose_js_func(&sandbox, "greet", ["name"], |args| {
+            let name = args
+                .get("name")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            Ok(serde_json::Value::String(format!("hello, {name}")))
         })
         .unwrap();
 
