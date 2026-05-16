@@ -120,6 +120,42 @@ Deno.test('jsRepl throws on JS errors', async () => {
   assertMatch(err.message, /JS error/i)
 })
 
+// --- exposeJsFunc ---
+
+Deno.test('exposeJsFunc is callable from jsRepl', async () => {
+  const sb = new SpadeBox().enableJs()
+  sb.exposeJsFunc('double', ['n'], ({ n }) => (n as number) * 2)
+  const result = await sb.jsRepl('double(21)')
+  assertEquals(result, '42')
+})
+
+Deno.test('exposeJsFunc string return value', async () => {
+  const sb = new SpadeBox().enableJs()
+  sb.exposeJsFunc('greet', ['name'], ({ name }) => `hello, ${name}`)
+  const result = await sb.jsRepl("greet('world')")
+  assertEquals(result, '"hello, world"')
+})
+
+Deno.test('exposeJsFunc error surfaces as JS Error', async () => {
+  const sb = new SpadeBox().enableJs()
+  sb.exposeJsFunc('boom', [], () => { throw new Error('intentional failure') })
+  const result = await sb.jsRepl("try { boom() } catch(e) { e.message }")
+  assertMatch(result, /intentional failure/)
+})
+
+Deno.test('exposeJsFunc persists across jsRepl calls', async () => {
+  const sb = new SpadeBox().enableJs()
+  sb.exposeJsFunc('add', ['a', 'b'], ({ a, b }) => (a as number) + (b as number))
+  await sb.jsRepl('let sum = add(3, 4);')
+  const result = await sb.jsRepl('sum')
+  assertEquals(result, '7')
+})
+
+Deno.test('exposeJsFunc throws if JS is not enabled', () => {
+  const sb = new SpadeBox()
+  assertRejects(async () => sb.exposeJsFunc('f', [], () => null))
+})
+
 // --- callTool ---
 
 Deno.test('callTool dispatches read_file and returns output', async () => {

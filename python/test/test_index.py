@@ -95,6 +95,47 @@ def test_js_repl_raises_on_js_errors():
         sb.js_repl("throw new Error('oops')")
 
 
+# --- expose_js_func ---
+
+def test_expose_js_func_callable_from_repl():
+    sb = SpadeBox().enable_js()
+    sb.expose_js_func('double', ['n'], lambda args: args['n'] * 2)
+    result = sb.js_repl('double(21)')
+    assert result == '42'
+
+
+def test_expose_js_func_string_return():
+    sb = SpadeBox().enable_js()
+    sb.expose_js_func('greet', ['name'], lambda args: f"hello, {args['name']}")
+    result = sb.js_repl("greet('world')")
+    assert result == '"hello, world"'
+
+
+def test_expose_js_func_error_surfaces_as_js_error():
+    sb = SpadeBox().enable_js()
+
+    def boom(args):
+        raise ValueError('intentional failure')
+
+    sb.expose_js_func('boom', [], boom)
+    result = sb.js_repl("try { boom() } catch(e) { e.message }")
+    assert 'intentional failure' in result
+
+
+def test_expose_js_func_persists_across_repl_calls():
+    sb = SpadeBox().enable_js()
+    sb.expose_js_func('add', ['a', 'b'], lambda args: args['a'] + args['b'])
+    sb.js_repl('let sum = add(3, 4);')
+    result = sb.js_repl('sum')
+    assert result == '7'
+
+
+def test_expose_js_func_requires_js_enabled():
+    sb = SpadeBox()  # JS not enabled
+    with pytest.raises(RuntimeError):
+        sb.expose_js_func('f', [], lambda args: None)
+
+
 # --- call_tool ---
 
 def test_call_tool_dispatches_read_file_and_returns_output(tmp_path):

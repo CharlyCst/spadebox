@@ -51,7 +51,10 @@ impl Tool for JsExecTool {
             let mut code = String::new();
             file.read_to_string(&mut code).map_err(ToolError::IoError)?;
 
-            let mut ctx = JsContext::new(sandbox);
+            let mut ctx = JsContext::new(&sandbox);
+            let funcs = sandbox.js.funcs.read().unwrap();
+            ctx.register_funcs(&funcs)?;
+            drop(funcs);
             ctx.eval(&code).map(|output| output.console.join("\n"))
         })
         .await
@@ -201,5 +204,30 @@ mod tests {
         .await
         .unwrap_err();
         assert!(matches!(err, ToolError::PermissionDenied(_)));
+    }
+
+    #[tokio::test]
+    async fn exposed_func_available_in_exec() {
+        let (dir, sandbox) = setup();
+        sandbox.expose_js_func("double", ["n"], |args| {
+            let n = args.get("n").and_then(|v| v.as_i64()).unwrap_or(0);
+            Ok(serde_json::Value::Number((n * 2).into()))
+        })
+        .unwrap();
+
+        std::fs::write(
+            dir.path().join("use_double.js"),
+            r#"var r = double(21); if (r !== 42) throw new Error("got " + r);"#,
+        )
+        .unwrap();
+
+        JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "use_double.js".into(),
+            },
+        )
+        .await
+        .unwrap();
     }
 }

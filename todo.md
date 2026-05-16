@@ -28,6 +28,7 @@
 - [x] Add support for base path (default to "/"). (the glob parameter handles that)
 - [x] Add support for case insensitivity. (no need to, the `(?i)` flag is sufficient)
 - [ ] Add support for limitting output size to N matches, where N is big enough but not too much (100?).
+- [ ] Respect .gitignore? (We really don't want to match stuff in node_modules)
 
 ## Glob
 

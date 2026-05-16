@@ -140,6 +140,104 @@ async fn js_repl() {
     );
 }
 
+// --- expose_js_func ---
+
+#[tokio::test]
+async fn expose_js_func() {
+    let sb = SpadeBox::new().enable_js();
+
+    sb.expose_js_func("double", ["n"], |args| {
+        let n = args["n"].as_i64().unwrap_or(0);
+        Ok(serde_json::Value::Number((n * 2).into()))
+    })
+    .unwrap();
+
+    // callable from the REPL
+    let result = sb.js_repl("double(21)").await.unwrap();
+    assert_eq!(result, "42");
+}
+
+#[tokio::test]
+async fn expose_js_func_string_return() {
+    let sb = SpadeBox::new().enable_js();
+
+    sb.expose_js_func("greet", ["name"], |args| {
+        let name = args["name"].as_str().unwrap_or("").to_owned();
+        Ok(serde_json::Value::String(format!("hello, {name}")))
+    })
+    .unwrap();
+
+    let result = sb.js_repl("greet('world')").await.unwrap();
+    assert_eq!(result, r#""hello, world""#);
+}
+
+#[tokio::test]
+async fn expose_js_func_error_surfaces_as_js_error() {
+    let sb = SpadeBox::new().enable_js();
+
+    sb.expose_js_func("boom", std::iter::empty::<&str>(), |_| {
+        Err("intentional failure".to_owned())
+    })
+    .unwrap();
+
+    let err = sb
+        .js_repl("try { boom() } catch(e) { e.message }")
+        .await
+        .unwrap();
+    assert!(
+        err.contains("intentional failure"),
+        "unexpected result: {err}"
+    );
+}
+
+#[tokio::test]
+async fn expose_js_func_persists_across_repl_calls() {
+    let sb = SpadeBox::new().enable_js();
+
+    sb.expose_js_func("add", ["a", "b"], |args| {
+        let a = args["a"].as_i64().unwrap_or(0);
+        let b = args["b"].as_i64().unwrap_or(0);
+        Ok(serde_json::Value::Number((a + b).into()))
+    })
+    .unwrap();
+
+    sb.js_repl("let sum = add(3, 4);").await.unwrap();
+    let result = sb.js_repl("sum").await.unwrap();
+    assert_eq!(result, "7");
+}
+
+#[tokio::test]
+async fn expose_js_func_available_in_js_exec() {
+    let dir = tempfile::TempDir::new().unwrap();
+    let sb = SpadeBox::new()
+        .enable_js()
+        .enable_files(dir.path())
+        .unwrap();
+
+    sb.expose_js_func("triple", ["n"], |args| {
+        let n = args["n"].as_i64().unwrap_or(0);
+        Ok(serde_json::Value::Number((n * 3).into()))
+    })
+    .unwrap();
+
+    std::fs::write(
+        dir.path().join("script.js"),
+        r#"var r = triple(7); if (r !== 21) throw new Error("got " + r);"#,
+    )
+    .unwrap();
+
+    sb.js_exec("script.js").await.unwrap();
+}
+
+#[tokio::test]
+async fn expose_js_func_requires_js_enabled() {
+    let sb = SpadeBox::new(); // JS not enabled
+    let err = sb.expose_js_func("f", std::iter::empty::<&str>(), |_| {
+        Ok(serde_json::Value::Null)
+    });
+    assert!(err.is_err());
+}
+
 // --- call_tool ---
 
 #[tokio::test]

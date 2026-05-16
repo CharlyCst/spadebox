@@ -9087,6 +9087,9 @@
         ]
       },
       "website": {
+        "dependencies": [
+          "jsr:@std/path@1"
+        ],
         "packageJson": {
           "dependencies": [
             "npm:@docusaurus/core@3.10.0",

@@ -3,7 +3,9 @@
 // the JavaScript calling convention (NAPI-RS converts snake_case identifiers to
 // camelCase in the generated bindings).
 
-use napi::bindgen_prelude::This;
+use napi::bindgen_prelude::{Function, This};
+use napi::threadsafe_function::{ThreadsafeFunctionCallMode, ThreadsafeCallContext};
+use napi::Env;
 use napi_derive::napi;
 use spadebox_core::{
   DomainRule, HttpVerb, Sandbox, enabled_tools,
@@ -295,6 +297,52 @@ impl SpadeBox {
   pub fn enable_js<'env>(&mut self, this: This<'env>) -> This<'env> {
     self.inner.enable_js();
     this
+  }
+
+  /// Expose a Node.js function as a global in the SpadeBox JavaScript runtime.
+  ///
+  /// `name` is the identifier the function will be callable as from `jsRepl` / `jsExec`.
+  /// `params` declares the parameter names in order. JS positional arguments are
+  /// mapped to a JavaScript object `{ paramName: value, ... }` and passed to `func`.
+  /// `func` receives this object and must return a JSON-compatible value.
+  /// The function is available in all subsequent `jsRepl` calls and in every `jsExec` context.
+  ///
+  /// **Note**: `func` must be a synchronous function. Async functions (those that
+  /// return a `Promise`) are not supported: the Boa thread blocks waiting for a
+  /// synchronous return value, so a `Promise` will be received as `{}` rather than
+  /// its resolved value.
+  ///
+  /// ```js
+  /// const sb = new SpadeBox().enableJs();
+  /// sb.exposeJsFunc("add", ["a", "b"], ({a, b}) => a + b);
+  /// const result = await sb.jsRepl("add(1, 2)"); // '3'
+  /// ```
+  #[napi(ts_args_type = "name: string, params: string[], func: (args: Record<string, unknown>) => unknown")]
+  pub fn expose_js_func(
+    &self,
+    name: String,
+    params: Vec<String>,
+    func: Function<'_, serde_json::Value, serde_json::Value>,
+  ) -> napi::Result<()> {
+    let tsfn = func
+      .build_threadsafe_function::<serde_json::Value>()
+      .build_callback(|ctx: ThreadsafeCallContext<serde_json::Value>| Ok(ctx.value))?;
+
+    let inner = Arc::clone(&self.inner);
+    let callback = move |args: serde_json::Value| -> Result<serde_json::Value, String> {
+      let (tx, rx) = std::sync::mpsc::channel::<Result<serde_json::Value, String>>();
+      tsfn.call_with_return_value(
+        args,
+        ThreadsafeFunctionCallMode::NonBlocking,
+        move |result: napi::Result<serde_json::Value>, _env: Env| {
+          let _ = tx.send(result.map_err(|e| e.to_string()));
+          Ok(())
+        },
+      );
+      rx.recv().map_err(|_| "JS callback channel disconnected".to_string())?
+    };
+
+    inner.expose_js_func(name, params, callback).map_err(to_napi_err)
   }
 
   /// Evaluate JavaScript code and return the result as a string.

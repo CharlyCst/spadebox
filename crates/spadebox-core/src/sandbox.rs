@@ -209,9 +209,8 @@ impl FilesConfig {
 // JavaScript configuration
 // ---------------------------------------------------------------------------
 
-/// A request sent to the dedicated JS context thread: source code to evaluate
-/// and a one-shot reply channel to return the result on.
-type JsRequest = (
+/// A request to evaluate JavaScript code, sent to the dedicated REPL thread.
+type JsEvalRequest = (
     String,
     tokio::sync::oneshot::Sender<ToolResult<crate::js_runtime::JsOutput>>,
 );
@@ -230,19 +229,41 @@ type JsRequest = (
 /// `std::sync::mpsc::Sender` because only the former is `Send + Sync`, which is
 /// required for `Sandbox` to be `Sync`.
 struct JsReplHandle {
-    tx: tokio::sync::mpsc::UnboundedSender<JsRequest>,
+    tx: tokio::sync::mpsc::UnboundedSender<JsEvalRequest>,
     /// Kept alive so the thread is joined on drop rather than detached.
     _thread: std::thread::JoinHandle<()>,
 }
 
+/// A native function stored in [`JsConfig::funcs`] and shared with JS contexts.
+pub(crate) type JsFunc =
+    Arc<dyn Fn(serde_json::Value) -> Result<serde_json::Value, String> + Send + Sync + 'static>;
+
 /// Configuration and handle for the JavaScript tools.
-#[derive(Default)]
 pub struct JsConfig {
     /// `None` until first use of the JavaScript REPL.
     //
     //  TODO: on drop we will need to signal the REPL thread to shut down, but this would require
     //  support for interrupting Boa, which is not available yet.
     repl_handle: RwLock<Option<JsReplHandle>>,
+    /// Native functions registered via [`Sandbox::expose_js_func`].
+    ///
+    /// Append-only. The REPL thread tracks a cursor and registers newly appended
+    /// functions before each evaluation. Fresh `js_exec` contexts register all
+    /// entries when they are constructed.
+    ///
+    /// Each entry is `(name, params, func)` where `params` lists the positional
+    /// parameter names. The runtime maps JS positional arguments to a JSON object
+    /// `{ paramName: value, ... }` before calling `func`.
+    pub(crate) funcs: RwLock<Vec<(String, Vec<String>, JsFunc)>>,
+}
+
+impl Default for JsConfig {
+    fn default() -> Self {
+        Self {
+            repl_handle: RwLock::new(None),
+            funcs: RwLock::new(Vec::new()),
+        }
+    }
 }
 
 impl JsConfig {
@@ -261,15 +282,24 @@ impl JsConfig {
             return; // Someone created the thread in between the drop and re-lock
         }
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsRequest>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsEvalRequest>();
         let thread = std::thread::spawn(move || {
-            let mut ctx = crate::js_runtime::JsContext::new(sandbox);
-            // `blocking_recv` parks this thread until a request arrives, then
-            // evaluates it synchronously. Loop exits when all senders are dropped
-            // (i.e., when `JsConfig` is dropped), cleanly destroying the context.
+            let mut ctx = crate::js_runtime::JsContext::new(&sandbox);
+            let mut registered = 0usize;
+            // `blocking_recv` parks this thread until a message arrives.
+            // Loop exits when all senders are dropped (i.e., when `JsConfig` is
+            // dropped), cleanly destroying the context.
             while let Some((code, reply)) = rx.blocking_recv() {
-                // Ignore send errors: the caller may have been cancelled.
-                let _ = reply.send(ctx.eval(&code));
+                // Register any functions appended since the last evaluation, then eval.
+                // Always advance the cursor even on error to avoid retrying a broken entry.
+                let result = {
+                    let funcs = sandbox.js.funcs.read().unwrap();
+                    let reg = ctx.register_funcs(&funcs[registered..]);
+                    registered = funcs.len();
+                    reg
+                }
+                .and_then(|()| ctx.eval(&code));
+                let _ = reply.send(result);
             }
         });
         *handle = Some(JsReplHandle {
@@ -302,6 +332,14 @@ impl JsConfig {
         reply_rx
             .await
             .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?
+    }
+
+    /// Appends `func` to the shared function table under `name`.
+    ///
+    /// The REPL thread picks up new entries before each evaluation; fresh
+    /// `js_exec` contexts register all entries on construction.
+    pub(crate) fn expose_js_func(&self, name: String, params: Vec<String>, func: JsFunc) {
+        self.funcs.write().unwrap().push((name, params, func));
     }
 }
 
@@ -400,6 +438,44 @@ impl Sandbox {
         let mut http_config = self.http.write().unwrap();
         http_config.domain_rules.push(rule);
         self
+    }
+
+    /// Registers a native function as a JavaScript global, available to both the
+    /// persistent REPL session and fresh `js_exec` contexts.
+    ///
+    /// `params` declares the positional parameter names. When the function is called
+    /// from JavaScript, positional arguments are mapped to a JSON object
+    /// `{ "paramName": value, … }` and passed to `func`. The return value is
+    /// converted back to a JS value, or a JS `Error` is thrown if `func` returns
+    /// `Err`.
+    ///
+    /// Returns [`ToolError::PermissionDenied`] if JavaScript has not been enabled.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # use std::sync::Arc;
+    /// # use spadebox_core::Sandbox;
+    /// let sandbox = Arc::new(Sandbox::new());
+    /// sandbox.enable_js();
+    /// sandbox.expose_js_func("add", ["a", "b"], |args| {
+    ///     let a = args["a"].as_i64().unwrap_or(0);
+    ///     let b = args["b"].as_i64().unwrap_or(0);
+    ///     Ok(serde_json::Value::Number((a + b).into()))
+    /// }).unwrap();
+    /// ```
+    pub fn expose_js_func(
+        &self,
+        name: impl Into<String>,
+        params: impl IntoIterator<Item = impl Into<String>>,
+        func: impl Fn(serde_json::Value) -> Result<serde_json::Value, String> + Send + Sync + 'static,
+    ) -> ToolResult<()> {
+        if !self.js_is_enabled() {
+            return Err(ToolError::PermissionDenied("JS is disabled".to_string()));
+        }
+        let params: Vec<String> = params.into_iter().map(Into::into).collect();
+        self.js.expose_js_func(name.into(), params, Arc::new(func));
+        Ok(())
     }
 }
 

@@ -34,12 +34,7 @@ export declare class SpadeBox {
    * `maxBytes` caps the number of bytes returned (default: 20 000). Pass `0` to disable.
    * Returns the file's content as a UTF-8 string.
    */
-  readFile(
-    path: string,
-    offset?: number | undefined | null,
-    limit?: number | undefined | null,
-    maxBytes?: number | undefined | null,
-  ): Promise<string>
+  readFile(path: string, offset?: number | undefined | null, limit?: number | undefined | null, maxBytes?: number | undefined | null): Promise<string>
   /**
    * Write text content to a file. Calls the `write_file` tool directly.
    *
@@ -109,13 +104,7 @@ export declare class SpadeBox {
    * Set `raw` to `true` to receive the raw response body unchanged.
    * `maxBytes` caps the number of bytes returned (default: 20 000). Pass `0` to disable.
    */
-  fetch(
-    url: string,
-    method: string,
-    body?: string | undefined | null,
-    raw?: boolean | undefined | null,
-    maxBytes?: number | undefined | null,
-  ): Promise<string>
+  fetch(url: string, method: string, body?: string | undefined | null, raw?: boolean | undefined | null, maxBytes?: number | undefined | null): Promise<string>
   /**
    * Enable the JavaScript tools. Returns `this` for chaining.
    *
@@ -127,6 +116,27 @@ export declare class SpadeBox {
    * ```
    */
   enableJs(): this
+  /**
+   * Expose a Node.js function as a global in the SpadeBox JavaScript runtime.
+   *
+   * `name` is the identifier the function will be callable as from `jsRepl` / `jsExec`.
+   * `params` declares the parameter names in order. JS positional arguments are
+   * mapped to a JavaScript object `{ paramName: value, ... }` and passed to `func`.
+   * `func` receives this object and must return a JSON-compatible value.
+   * The function is available in all subsequent `jsRepl` calls and in every `jsExec` context.
+   *
+   * **Note**: `func` must be a synchronous function. Async functions (those that
+   * return a `Promise`) are not supported: the Boa thread blocks waiting for a
+   * synchronous return value, so a `Promise` will be received as `{}` rather than
+   * its resolved value.
+   *
+   * ```js
+   * const sb = new SpadeBox().enableJs();
+   * sb.exposeJsFunc("add", ["a", "b"], ({a, b}) => a + b);
+   * const result = await sb.jsRepl("add(1, 2)"); // '3'
+   * ```
+   */
+  exposeJsFunc(name: string, params: string[], func: (args: Record<string, unknown>) => unknown): void
   /**
    * Evaluate JavaScript code and return the result as a string.
    *
@@ -152,13 +162,7 @@ export declare class SpadeBox {
    * (with no `dst`) to delete `src` instead of moving it.
    * Set `createDirs` to `true` to create any missing intermediate directories for the destination.
    */
-  move(
-    src: string,
-    dst?: string | undefined | null,
-    overwrite?: boolean | undefined | null,
-    del?: boolean | undefined | null,
-    createDirs?: boolean | undefined | null,
-  ): Promise<string>
+  move(src: string, dst?: string | undefined | null, overwrite?: boolean | undefined | null, del?: boolean | undefined | null, createDirs?: boolean | undefined | null): Promise<string>
   /**
    * Replace text within a file.
    *

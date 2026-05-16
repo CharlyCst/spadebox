@@ -364,6 +364,26 @@ impl SpadeBox {
         .await
     }
 
+    /// Register a native function as a JavaScript global, available to both the
+    /// persistent REPL session and fresh `js_exec` contexts.
+    ///
+    /// `params` declares the positional parameter names. When the function is
+    /// called from JavaScript, positional arguments are mapped to a JSON object
+    /// `{ "paramName": value, … }` and passed to `func`. The return value is
+    /// converted back to a JS value, or a JS `Error` is thrown if `func` returns
+    /// `Err`. Requires [`enable_js`](Self::enable_js) to have been called first.
+    pub fn expose_js_func(
+        &self,
+        name: impl Into<String>,
+        params: impl IntoIterator<Item = impl Into<String>>,
+        func: impl Fn(serde_json::Value) -> Result<serde_json::Value, String>
+            + Send
+            + Sync
+            + 'static,
+    ) -> Result<(), ToolError> {
+        self.inner.expose_js_func(name, params, func)
+    }
+
     /// Evaluate JavaScript code and return the result as a string.
     ///
     /// The session is persistent: variables and functions defined in one call
