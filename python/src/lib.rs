@@ -3,8 +3,9 @@
 
 use pyo3::exceptions::{PyRuntimeError, PyValueError};
 use pyo3::prelude::*;
+use pyo3::types::PyTuple;
 use spadebox_core::{
-    DomainRule, HttpVerb, Sandbox, enabled_tools,
+    DomainRule, HttpVerb, Sandbox, enabled_tools, expose_js_func,
     tools::{
         EditFileTool, EditParams, FetchParams, FetchTool, GlobParams, GlobTool, GrepParams,
         GrepTool, JsExecParams, JsExecTool, JsReplParams, JsReplTool, MoveParams, MoveTool,
@@ -439,6 +440,44 @@ impl SpadeBox {
                         max_bytes,
                     },
                 )
+                .await
+                .map_err(to_py_err)
+            })
+        })
+    }
+
+    /// Expose a Python callable as a JavaScript global function in the REPL session.
+    ///
+    /// `name` is the JavaScript identifier the function will be available as.
+    /// `func` is any Python callable; it receives JS arguments as strings and
+    /// must return a string (or raise an exception). The function can be called
+    /// from any subsequent `js_repl` call::
+    ///
+    ///     sb = SpadeBox().enable_js()
+    ///     sb.expose_js_func("add", lambda a, b: str(int(a) + int(b)))
+    ///     result = sb.js_repl("add(1, 2)")  # "3"
+    pub fn expose_js_func(
+        &self,
+        py: Python<'_>,
+        name: String,
+        func: Py<PyAny>,
+    ) -> PyResult<()> {
+        let inner = Arc::clone(&self.inner);
+        let runtime = Arc::clone(&self.runtime);
+        py.detach(|| {
+            runtime.block_on(async move {
+                expose_js_func(&inner, name, move |args: Vec<String>| {
+                    Python::attach(|py| {
+                        let py_args: Vec<Py<PyAny>> = args
+                            .iter()
+                            .map(|s| s.clone().into_pyobject(py).unwrap().into())
+                            .collect();
+                        let tuple = PyTuple::new(py, py_args).unwrap();
+                        func.call1(py, tuple)
+                            .map(|r| r.to_string())
+                            .map_err(|e| e.to_string())
+                    })
+                })
                 .await
                 .map_err(to_py_err)
             })

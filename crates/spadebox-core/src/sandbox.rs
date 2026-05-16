@@ -209,12 +209,20 @@ impl FilesConfig {
 // JavaScript configuration
 // ---------------------------------------------------------------------------
 
-/// A request sent to the dedicated JS context thread: source code to evaluate
-/// and a one-shot reply channel to return the result on.
-type JsRequest = (
-    String,
-    tokio::sync::oneshot::Sender<ToolResult<crate::js_runtime::JsOutput>>,
-);
+/// A message sent to the dedicated JS context thread.
+pub(crate) enum JsMessage {
+    /// Evaluate JavaScript source code and return the result.
+    Eval(
+        String,
+        tokio::sync::oneshot::Sender<ToolResult<crate::js_runtime::JsOutput>>,
+    ),
+    /// Register a native Rust function as a JavaScript global.
+    Register(
+        String,
+        Box<dyn Fn(Vec<String>) -> Result<String, String> + Send + 'static>,
+        tokio::sync::oneshot::Sender<()>,
+    ),
+}
 
 /// Live handle to the dedicated JS REPL thread.
 ///
@@ -230,7 +238,7 @@ type JsRequest = (
 /// `std::sync::mpsc::Sender` because only the former is `Send + Sync`, which is
 /// required for `Sandbox` to be `Sync`.
 struct JsReplHandle {
-    tx: tokio::sync::mpsc::UnboundedSender<JsRequest>,
+    tx: tokio::sync::mpsc::UnboundedSender<JsMessage>,
     /// Kept alive so the thread is joined on drop rather than detached.
     _thread: std::thread::JoinHandle<()>,
 }
@@ -261,15 +269,22 @@ impl JsConfig {
             return; // Someone created the thread in between the drop and re-lock
         }
 
-        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsRequest>();
+        let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsMessage>();
         let thread = std::thread::spawn(move || {
             let mut ctx = crate::js_runtime::JsContext::new(sandbox);
-            // `blocking_recv` parks this thread until a request arrives, then
-            // evaluates it synchronously. Loop exits when all senders are dropped
-            // (i.e., when `JsConfig` is dropped), cleanly destroying the context.
-            while let Some((code, reply)) = rx.blocking_recv() {
-                // Ignore send errors: the caller may have been cancelled.
-                let _ = reply.send(ctx.eval(&code));
+            // `blocking_recv` parks this thread until a message arrives.
+            // Loop exits when all senders are dropped (i.e., when `JsConfig` is
+            // dropped), cleanly destroying the context.
+            while let Some(msg) = rx.blocking_recv() {
+                match msg {
+                    JsMessage::Eval(code, reply) => {
+                        let _ = reply.send(ctx.eval(&code));
+                    }
+                    JsMessage::Register(name, func, reply) => {
+                        ctx.register_func(&name, func);
+                        let _ = reply.send(());
+                    }
+                }
             }
         });
         *handle = Some(JsReplHandle {
@@ -294,7 +309,7 @@ impl JsConfig {
                 .as_ref()
                 .expect("init_repl_handle guarantees Some")
                 .tx;
-            tx.send((code, reply_tx))
+            tx.send(JsMessage::Eval(code, reply_tx))
                 .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?;
         }
 
@@ -302,6 +317,34 @@ impl JsConfig {
         reply_rx
             .await
             .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?
+    }
+
+    /// Registers a native Rust function as a JavaScript global in the REPL session.
+    ///
+    /// Initialises the JS thread if it has not been started yet. The function is
+    /// available in all subsequent `repl_eval` calls.
+    pub(crate) async fn expose_js_func(
+        &self,
+        sandbox: Arc<Sandbox>,
+        name: String,
+        func: Box<dyn Fn(Vec<String>) -> Result<String, String> + Send + 'static>,
+    ) -> ToolResult<()> {
+        self.init_repl_handle(sandbox);
+        let (reply_tx, reply_rx) = tokio::sync::oneshot::channel();
+
+        {
+            let handle = self.repl_handle.read().unwrap();
+            let tx = &handle
+                .as_ref()
+                .expect("init_repl_handle guarantees Some")
+                .tx;
+            tx.send(JsMessage::Register(name, func, reply_tx))
+                .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))?;
+        }
+
+        reply_rx
+            .await
+            .map_err(|_| ToolError::JsError("JS repl thread has shut down".into()))
     }
 }
 

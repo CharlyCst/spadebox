@@ -3,7 +3,9 @@
 // the JavaScript calling convention (NAPI-RS converts snake_case identifiers to
 // camelCase in the generated bindings).
 
-use napi::bindgen_prelude::This;
+use napi::bindgen_prelude::{execute_tokio_future_with_finalize_callback, Function, This};
+use napi::threadsafe_function::{ThreadsafeFunctionCallMode, ThreadsafeCallContext};
+use napi::Env;
 use napi_derive::napi;
 use spadebox_core::{
   DomainRule, HttpVerb, Sandbox, enabled_tools,
@@ -295,6 +297,65 @@ impl SpadeBox {
   pub fn enable_js<'env>(&mut self, this: This<'env>) -> This<'env> {
     self.inner.enable_js();
     this
+  }
+
+  /// Expose a Node.js function as a global in the Boa REPL session.
+  ///
+  /// `name` is the identifier the function will be callable as from `jsRepl` / `jsExec`.
+  /// `func` receives JS arguments as an array of strings and must return a string.
+  ///
+  /// Returns a Promise that resolves once the function is registered.
+  ///
+  /// ```js
+  /// const sb = new SpadeBox().enableJs();
+  /// await sb.exposeJsFunc("add", (args) => String(Number(args[0]) + Number(args[1])));
+  /// const result = await sb.jsRepl("add(1, 2)"); // '"3"'
+  /// ```
+  #[napi]
+  pub fn expose_js_func(
+    &self,
+    name: String,
+    func: Function<'_, (Vec<String>,), String>,
+    env: &Env,
+  ) -> napi::Result<napi::sys::napi_value> {
+    // Build a Send + 'static threadsafe handle synchronously, before spawning
+    // the async registration task. This avoids capturing the non-Send `func`
+    // value into the async future.
+    let tsfn = func
+      .build_threadsafe_function::<Vec<String>>()
+      .build_callback(|ctx: ThreadsafeCallContext<Vec<String>>| Ok((ctx.value,)))?;
+
+    let inner = Arc::clone(&self.inner);
+
+    // Wrap the threadsafe function in a blocking Rust closure for the Boa thread.
+    // When Boa calls this closure, it posts to the Node.js event loop and blocks
+    // until the result arrives via a sync channel.
+    let callback = move |args: Vec<String>| -> Result<String, String> {
+      let (tx, rx) = std::sync::mpsc::channel::<napi::Result<String>>();
+      tsfn.call_with_return_value(
+        args,
+        ThreadsafeFunctionCallMode::NonBlocking,
+        move |result: napi::Result<String>, _env| {
+          let _ = tx.send(result);
+          Ok(())
+        },
+      );
+      rx.recv()
+        .map_err(|_| "JS callback channel disconnected".to_string())?
+        .map_err(|e| e.to_string())
+    };
+
+    // Spawn the async registration on the tokio runtime and return a raw Promise.
+    execute_tokio_future_with_finalize_callback(
+      env.raw(),
+      async move {
+        spadebox_core::expose_js_func(&inner, name, callback)
+          .await
+          .map_err(to_napi_err)
+      },
+      |env, _: ()| unsafe { napi::bindgen_prelude::ToNapiValue::to_napi_value(env, ()) },
+      None,
+    )
   }
 
   /// Evaluate JavaScript code and return the result as a string.
