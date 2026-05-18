@@ -95,6 +95,10 @@ const config: Config = {
               label: 'npm',
               href: 'https://www.npmjs.com/package/@spadebox/spadebox',
             },
+            {
+              label: 'PyPI',
+              href: 'https://pypi.org/project/spadebox/',
+            },
           ],
         },
       ],
