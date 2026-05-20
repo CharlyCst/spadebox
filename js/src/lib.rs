@@ -3,7 +3,7 @@
 // the JavaScript calling convention (NAPI-RS converts snake_case identifiers to
 // camelCase in the generated bindings).
 
-use napi::bindgen_prelude::{Function, This};
+use napi::bindgen_prelude::{Function, Promise, This};
 use napi::threadsafe_function::{ThreadsafeFunctionCallMode, ThreadsafeCallContext};
 use napi::Env;
 use napi_derive::napi;
@@ -304,26 +304,29 @@ impl SpadeBox {
   /// `name` is the identifier the function will be callable as from `jsRepl` / `jsExec`.
   /// `params` declares the parameter names in order. JS positional arguments are
   /// mapped to a JavaScript object `{ paramName: value, ... }` and passed to `func`.
-  /// `func` receives this object and must return a JSON-compatible value.
+  /// `func` receives this object and must return a JSON-compatible value or a
+  /// `Promise` that resolves to one. Both synchronous and async functions are supported.
   /// The function is available in all subsequent `jsRepl` calls and in every `jsExec` context.
-  ///
-  /// **Note**: `func` must be a synchronous function. Async functions (those that
-  /// return a `Promise`) are not supported: the Boa thread blocks waiting for a
-  /// synchronous return value, so a `Promise` will be received as `{}` rather than
-  /// its resolved value.
+  /// Returns `this` for chaining.
   ///
   /// ```js
   /// const sb = new SpadeBox().enableJs();
   /// sb.exposeJsFunc("add", ["a", "b"], ({a, b}) => a + b);
   /// const result = await sb.jsRepl("add(1, 2)"); // '3'
+  ///
+  /// // Async and chaining are also supported:
+  /// const sb = new SpadeBox()
+  ///   .enableJs()
+  ///   .exposeJsFunc("fetchName", ["id"], async ({id}) => getName(id));
   /// ```
-  #[napi(ts_args_type = "name: string, params: string[], func: (args: Record<string, unknown>) => unknown")]
-  pub fn expose_js_func(
+  #[napi(ts_args_type = "name: string, params: string[], func: (args: Record<string, unknown>) => unknown | Promise<unknown>")]
+  pub fn expose_js_func<'env>(
     &self,
     name: String,
     params: Vec<String>,
-    func: Function<'_, serde_json::Value, serde_json::Value>,
-  ) -> napi::Result<()> {
+    func: Function<'_, serde_json::Value, Promise<serde_json::Value>>,
+    this: This<'env>,
+  ) -> napi::Result<This<'env>> {
     let tsfn = func
       .build_threadsafe_function::<serde_json::Value>()
       .build_callback(|ctx: ThreadsafeCallContext<serde_json::Value>| Ok(ctx.value))?;
@@ -333,16 +336,33 @@ impl SpadeBox {
       let (tx, rx) = std::sync::mpsc::channel::<Result<serde_json::Value, String>>();
       tsfn.call_with_return_value(
         args,
-        ThreadsafeFunctionCallMode::NonBlocking,
-        move |result: napi::Result<serde_json::Value>, _env: Env| {
-          let _ = tx.send(result.map_err(|e| e.to_string()));
+        ThreadsafeFunctionCallMode::Blocking,
+        move |result: napi::Result<Promise<serde_json::Value>>, _env: Env| {
+          match result {
+            Err(e) => {
+              let _ = tx.send(Err(e.to_string()));
+            }
+            Ok(promise) => {
+              // The Promise resolves via JS microtasks on the event loop thread.
+              // We spawn a dedicated OS thread with its own tokio runtime so the
+              // event loop can continue running (processing the .then() callback)
+              // while Boa blocks on rx.recv() waiting for the result.
+              std::thread::spawn(move || {
+                let rt = tokio::runtime::Builder::new_current_thread()
+                  .build()
+                  .expect("tokio runtime for Promise resolution");
+                let _ = tx.send(rt.block_on(promise).map_err(|e| e.to_string()));
+              });
+            }
+          }
           Ok(())
         },
       );
       rx.recv().map_err(|_| "JS callback channel disconnected".to_string())?
     };
 
-    inner.expose_js_func(name, params, callback).map_err(to_napi_err)
+    inner.expose_js_func(name, params, callback).map_err(to_napi_err)?;
+    Ok(this)
   }
 
   /// Evaluate JavaScript code and return the result as a string.

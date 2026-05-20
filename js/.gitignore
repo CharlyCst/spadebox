@@ -1,0 +1,8 @@
+# napi-rs build outputs
+napi_generated.js
+napi_generated.d.ts
+*.node
+
+# tsc build outputs
+index.js
+index.d.ts

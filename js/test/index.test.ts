@@ -156,6 +156,20 @@ Deno.test('exposeJsFunc throws if JS is not enabled', () => {
   assertRejects(async () => sb.exposeJsFunc('f', [], () => null))
 })
 
+Deno.test('exposeJsFunc async function resolves promise', async () => {
+  const sb = new SpadeBox().enableJs()
+  sb.exposeJsFunc('asyncDouble', ['n'], async ({ n }) => (n as number) * 2)
+  const result = await sb.jsRepl('asyncDouble(21)')
+  assertEquals(result, '42')
+})
+
+Deno.test('exposeJsFunc async function with object return', async () => {
+  const sb = new SpadeBox().enableJs()
+  sb.exposeJsFunc('asyncObj', ['x'], async ({ x }) => ({ value: x, doubled: (x as number) * 2 }))
+  const result = await sb.jsRepl('asyncObj(5).value')
+  assertEquals(result, '5')
+})
+
 // --- callTool ---
 
 Deno.test('callTool dispatches read_file and returns output', async () => {

@@ -19,7 +19,9 @@
   "files": [
     "README.md",
     "index.d.ts",
-    "index.js"
+    "index.js",
+    "napi_generated.js",
+    "napi_generated.d.ts"
   ],
   "engines": {
     "node": ">= 12.22.0 < 13 || >= 14.17.0 < 15 || >= 15.12.0 < 16 || >= 16.0.0"
