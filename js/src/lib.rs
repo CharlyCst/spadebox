@@ -309,6 +309,10 @@ impl SpadeBox {
   /// The function is available in all subsequent `jsRepl` calls and in every `jsExec` context.
   /// Returns `this` for chaining.
   ///
+  /// Security: exposed functions execute as trusted host code outside SpadeBox's
+  /// JavaScript runtime and outside the SpadeBox sandbox. Only expose callbacks
+  /// that intentionally provide capabilities you want JavaScript code to have.
+  ///
   /// ```js
   /// const sb = new SpadeBox().enableJs();
   /// sb.exposeJsFunc("add", ["a", "b"], ({a, b}) => a + b);

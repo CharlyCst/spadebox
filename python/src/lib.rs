@@ -453,7 +453,14 @@ impl SpadeBox {
     /// are mapped to a Python dict ``{"paramName": value, ...}`` and passed to
     /// `func`. `func` must return a JSON-serialisable value. The function is
     /// available in all subsequent `js_repl` calls and in every `js_exec`
-    /// context::
+    /// context.
+    ///
+    /// Security: exposed functions execute as trusted host code outside
+    /// SpadeBox's JavaScript runtime and outside the SpadeBox sandbox. Only
+    /// expose callbacks that intentionally provide capabilities you want
+    /// JavaScript code to have.
+    ///
+    /// Example::
     ///
     ///     sb = SpadeBox().enable_js()
     ///     sb.expose_js_func("add", ["a", "b"], lambda args: args["a"] + args["b"])

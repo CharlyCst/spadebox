@@ -451,6 +451,12 @@ impl Sandbox {
     ///
     /// Returns [`ToolError::PermissionDenied`] if JavaScript has not been enabled.
     ///
+    /// # Security
+    ///
+    /// Exposed functions execute as trusted host code outside SpadeBox's JavaScript
+    /// runtime and outside the SpadeBox sandbox. Only expose callbacks that
+    /// intentionally provide capabilities you want JavaScript code to have.
+    ///
     /// # Example
     ///
     /// ```no_run
