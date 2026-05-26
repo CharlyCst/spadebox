@@ -209,11 +209,12 @@ mod tests {
     #[tokio::test]
     async fn exposed_func_available_in_exec() {
         let (dir, sandbox) = setup();
-        sandbox.expose_js_func("double", ["n"], |args| {
-            let n = args.get("n").and_then(|v| v.as_i64()).unwrap_or(0);
-            Ok(serde_json::Value::Number((n * 2).into()))
-        })
-        .unwrap();
+        sandbox
+            .expose_js_func("double", ["n"], |args| {
+                let n = args.get("n").and_then(|v| v.as_i64()).unwrap_or(0);
+                Ok(serde_json::Value::Number((n * 2).into()))
+            })
+            .unwrap();
 
         std::fs::write(
             dir.path().join("use_double.js"),

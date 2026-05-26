@@ -473,34 +473,36 @@ impl SpadeBox {
     ) -> PyResult<()> {
         let func = func.unbind();
         let inner = Arc::clone(&self.inner);
-        inner.expose_js_func(
-            name,
-            params,
-            move |args: serde_json::Value| -> Result<serde_json::Value, String> {
-                Python::attach(|py| {
-                    // Deserialise args JSON into a Python dict via json.loads.
-                    let json_str = serde_json::to_string(&args).map_err(|e| e.to_string())?;
-                    let json_mod = py.import("json").map_err(|e: PyErr| e.to_string())?;
-                    let py_args = json_mod
-                        .call_method1("loads", (json_str,))
-                        .map_err(|e: PyErr| e.to_string())?;
+        inner
+            .expose_js_func(
+                name,
+                params,
+                move |args: serde_json::Value| -> Result<serde_json::Value, String> {
+                    Python::attach(|py| {
+                        // Deserialise args JSON into a Python dict via json.loads.
+                        let json_str = serde_json::to_string(&args).map_err(|e| e.to_string())?;
+                        let json_mod = py.import("json").map_err(|e: PyErr| e.to_string())?;
+                        let py_args = json_mod
+                            .call_method1("loads", (json_str,))
+                            .map_err(|e: PyErr| e.to_string())?;
 
-                    // Call the user's Python function with the dict.
-                    let tuple = PyTuple::new(py, [py_args]).map_err(|e: PyErr| e.to_string())?;
-                    let result = func.call1(py, tuple).map_err(|e: PyErr| e.to_string())?;
+                        // Call the user's Python function with the dict.
+                        let tuple =
+                            PyTuple::new(py, [py_args]).map_err(|e: PyErr| e.to_string())?;
+                        let result = func.call1(py, tuple).map_err(|e: PyErr| e.to_string())?;
 
-                    // Serialise the return value back to JSON via json.dumps.
-                    let result_str: String = json_mod
-                        .call_method1("dumps", (result.bind(py),))
-                        .map_err(|e: PyErr| e.to_string())?
-                        .extract()
-                        .map_err(|e: PyErr| e.to_string())?;
+                        // Serialise the return value back to JSON via json.dumps.
+                        let result_str: String = json_mod
+                            .call_method1("dumps", (result.bind(py),))
+                            .map_err(|e: PyErr| e.to_string())?
+                            .extract()
+                            .map_err(|e: PyErr| e.to_string())?;
 
-                    serde_json::from_str(&result_str).map_err(|e| e.to_string())
-                })
-            },
-        )
-        .map_err(to_py_err)
+                        serde_json::from_str(&result_str).map_err(|e| e.to_string())
+                    })
+                },
+            )
+            .map_err(to_py_err)
     }
 
     /// Evaluate JavaScript code and return the result as a string.

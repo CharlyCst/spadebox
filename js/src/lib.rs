@@ -3,9 +3,9 @@
 // the JavaScript calling convention (NAPI-RS converts snake_case identifiers to
 // camelCase in the generated bindings).
 
-use napi::bindgen_prelude::{Function, Promise, This};
-use napi::threadsafe_function::{ThreadsafeFunctionCallMode, ThreadsafeCallContext};
 use napi::Env;
+use napi::bindgen_prelude::{Function, Promise, This};
+use napi::threadsafe_function::{ThreadsafeCallContext, ThreadsafeFunctionCallMode};
 use napi_derive::napi;
 use spadebox_core::{
   DomainRule, HttpVerb, Sandbox, enabled_tools,
@@ -323,7 +323,9 @@ impl SpadeBox {
   ///   .enableJs()
   ///   .exposeJsFunc("fetchName", ["id"], async ({id}) => getName(id));
   /// ```
-  #[napi(ts_args_type = "name: string, params: string[], func: (args: Record<string, unknown>) => unknown | Promise<unknown>")]
+  #[napi(
+    ts_args_type = "name: string, params: string[], func: (args: Record<string, unknown>) => unknown | Promise<unknown>"
+  )]
   pub fn expose_js_func<'env>(
     &self,
     name: String,
@@ -362,10 +364,13 @@ impl SpadeBox {
           Ok(())
         },
       );
-      rx.recv().map_err(|_| "JS callback channel disconnected".to_string())?
+      rx.recv()
+        .map_err(|_| "JS callback channel disconnected".to_string())?
     };
 
-    inner.expose_js_func(name, params, callback).map_err(to_napi_err)?;
+    inner
+      .expose_js_func(name, params, callback)
+      .map_err(to_napi_err)?;
     Ok(this)
   }
 

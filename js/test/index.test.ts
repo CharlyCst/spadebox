@@ -1,4 +1,4 @@
-import { assert, assertEquals, assertMatch, assertRejects } from '@std/assert'
+import { assert, assertEquals, assertMatch, assertRejects, assertThrows } from '@std/assert'
 import * as fs from 'node:fs/promises'
 import * as os from 'node:os'
 import * as path from 'node:path'
@@ -138,8 +138,10 @@ Deno.test('exposeJsFunc string return value', async () => {
 
 Deno.test('exposeJsFunc error surfaces as JS Error', async () => {
   const sb = new SpadeBox().enableJs()
-  sb.exposeJsFunc('boom', [], () => { throw new Error('intentional failure') })
-  const result = await sb.jsRepl("try { boom() } catch(e) { e.message }")
+  sb.exposeJsFunc('boom', [], () => {
+    throw new Error('intentional failure')
+  })
+  const result = await sb.jsRepl('try { boom() } catch(e) { e.message }')
   assertMatch(result, /intentional failure/)
 })
 
@@ -153,19 +155,19 @@ Deno.test('exposeJsFunc persists across jsRepl calls', async () => {
 
 Deno.test('exposeJsFunc throws if JS is not enabled', () => {
   const sb = new SpadeBox()
-  assertRejects(async () => sb.exposeJsFunc('f', [], () => null))
+  assertThrows(() => sb.exposeJsFunc('f', [], () => null))
 })
 
 Deno.test('exposeJsFunc async function resolves promise', async () => {
   const sb = new SpadeBox().enableJs()
-  sb.exposeJsFunc('asyncDouble', ['n'], async ({ n }) => (n as number) * 2)
+  sb.exposeJsFunc('asyncDouble', ['n'], async ({ n }) => await Promise.resolve((n as number) * 2))
   const result = await sb.jsRepl('asyncDouble(21)')
   assertEquals(result, '42')
 })
 
 Deno.test('exposeJsFunc async function with object return', async () => {
   const sb = new SpadeBox().enableJs()
-  sb.exposeJsFunc('asyncObj', ['x'], async ({ x }) => ({ value: x, doubled: (x as number) * 2 }))
+  sb.exposeJsFunc('asyncObj', ['x'], async ({ x }) => await Promise.resolve({ value: x, doubled: (x as number) * 2 }))
   const result = await sb.jsRepl('asyncObj(5).value')
   assertEquals(result, '5')
 })

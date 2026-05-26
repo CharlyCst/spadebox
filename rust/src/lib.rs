@@ -376,10 +376,7 @@ impl SpadeBox {
         &self,
         name: impl Into<String>,
         params: impl IntoIterator<Item = impl Into<String>>,
-        func: impl Fn(serde_json::Value) -> Result<serde_json::Value, String>
-            + Send
-            + Sync
-            + 'static,
+        func: impl Fn(serde_json::Value) -> Result<serde_json::Value, String> + Send + Sync + 'static,
     ) -> Result<(), ToolError> {
         self.inner.expose_js_func(name, params, func)
     }
