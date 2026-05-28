@@ -18,6 +18,7 @@ test-only:
     cargo test
     cd js && deno check && deno task test
     cd python && uv run --no-sync pytest test
+    deno task test
 
 lint:
     cargo fmt -- --check
