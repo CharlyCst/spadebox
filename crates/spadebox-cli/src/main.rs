@@ -1,4 +1,5 @@
 use std::env;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::Context;
@@ -11,6 +12,10 @@ use spadebox_core::{DomainRule, HttpVerb, Sandbox, ToolDef, enabled_tools};
 #[derive(clap::Parser)]
 #[command(version, about)]
 struct Cli {
+    /// Sandbox root directory (defaults to the current working directory).
+    #[arg(long)]
+    root: Option<PathBuf>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -45,13 +50,16 @@ enum ToolsAction {
     },
 }
 
-fn build_sandbox() -> anyhow::Result<Arc<Sandbox>> {
-    let cwd = env::current_dir().context("failed to get current working directory")?;
+fn build_sandbox(root: Option<PathBuf>) -> anyhow::Result<Arc<Sandbox>> {
+    let root = match root {
+        Some(p) => p,
+        None => env::current_dir().context("failed to get current working directory")?,
+    };
     let sandbox = Sandbox::new();
 
     sandbox
-        .enable_fs(&cwd)
-        .with_context(|| format!("failed to open sandbox root at {}", cwd.display()))?;
+        .enable_fs(&root)
+        .with_context(|| format!("failed to open sandbox root at {}", root.display()))?;
 
     sandbox.enable_http().allow(
         DomainRule::new(
@@ -172,7 +180,7 @@ async fn main() -> anyhow::Result<()> {
     use clap::Parser;
 
     let cli = Cli::parse();
-    let sandbox = build_sandbox()?;
+    let sandbox = build_sandbox(cli.root)?;
 
     match cli.command {
         Command::Tools {
