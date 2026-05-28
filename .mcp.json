@@ -5,7 +5,10 @@
       "command": "./target/debug/spadebox-mcp",
       "args": [
         "--files",
-        "./sandbox-test"
+        "./sandbox-test",
+        "--allow",
+        "*:GET,HEAD",
+        "--js"
       ],
       "env": {}
     }
