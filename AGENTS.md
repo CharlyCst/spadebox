@@ -5,18 +5,22 @@ or update files. SpadeBox uses the `cap-std` crate to provide lightweight sandbo
 
 SpadeBox can be used through:
 
-- The native Rust library
-- As an MCP server
-- In JavaScript through the napi-rs bindings
+- The native Rust library (`rust/`)
+- As an MCP server (`crates/spadebox-mcp`)
+- In JavaScript via napi-rs bindings (`js/`)
+- In Python via PyO3 bindings (`python/`)
 
 ## Codebase Overview
 
-- `crates/spadebox-core` — Rust library, source of truth for all tool logic and documentation. Each tool lives in
-  `src/tools/<name>.rs` and implements the `Tool` trait.
-- `crates/spadebox-mcp` — MCP server. Thin wrapper: derives tool names, descriptions, and schemas directly from
+- `crates/spadebox-core` — Core library, source of truth for all tool logic. Each tool lives in `src/tools/<name>.rs`
+  and implements the `Tool` trait.
+- `crates/spadebox-mcp` — MCP server. Thin wrapper that derives tool names, descriptions, and schemas from
   `spadebox-core` at runtime.
+- `crates/spadebox-cli` — Human-friendly CLI interface to `spadebox-core`.
+- `rust/` — Public Rust binding (re-exports `spadebox-core`'s public API).
 - `js/` — JavaScript bindings via napi-rs. `src/lib.rs` is the Rust source; `index.d.ts` is auto-generated on build.
-  Convenience methods (`readFile`, `writeFile`, etc.) wrap the core tools directly.
+- `python/` — Python bindings via PyO3/maturin.
+- `examples/` — Example projects for each language binding.
 - `skill/` — Agent skill files (source of truth). Symlinked into `.claude/skills/` for Claude Code.
 
 ## How To
