@@ -6,7 +6,7 @@ or update files. SpadeBox uses the `cap-std` crate to provide lightweight sandbo
 SpadeBox can be used through:
 
 - The native Rust library (`rust/`)
-- As an MCP server (`crates/spadebox-mcp`)
+- As an MCP server (`mcp/`)
 - In JavaScript via napi-rs bindings (`js/`)
 - In Python via PyO3 bindings (`python/`)
 
@@ -14,8 +14,7 @@ SpadeBox can be used through:
 
 - `crates/spadebox-core` — Core library, source of truth for all tool logic. Each tool lives in `src/tools/<name>.rs`
   and implements the `Tool` trait.
-- `crates/spadebox-mcp` — MCP server. Thin wrapper that derives tool names, descriptions, and schemas from
-  `spadebox-core` at runtime.
+- `mcp/` — MCP server. Thin wrapper that derives tool names, descriptions, and schemas from `spadebox-core` at runtime.
 - `crates/spadebox-cli` — Human-friendly CLI interface to `spadebox-core`.
 - `rust/` — Public Rust binding (re-exports `spadebox-core`'s public API).
 - `js/` — JavaScript bindings via napi-rs. `src/lib.rs` is the Rust source; `index.d.ts` is auto-generated on build.

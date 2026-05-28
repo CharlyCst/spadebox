@@ -107,8 +107,8 @@ server and JSON schema both derive from them automatically — never duplicate t
    - Add a `NewTool::NAME if sandbox.<subsystem>.is_enabled() => NewTool::call_json(sandbox, params_json).await` arm to
      the `call_tool` match.
 
-3. **`crates/spadebox-mcp/src/main.rs`** — **no changes needed**. The MCP server calls `enabled_tools(sandbox)` which
-   automatically picks up any tool registered in `enabled_tools()` in `tools/mod.rs`, and delegates all dispatch to
+3. **`mcp/src/main.rs`** — **no changes needed**. The MCP server calls `enabled_tools(sandbox)` which automatically
+   picks up any tool registered in `enabled_tools()` in `tools/mod.rs`, and delegates all dispatch to
    `spadebox_core::call_tool`.
 
 4. **`js/src/lib.rs`**

@@ -51,7 +51,7 @@ Rust crates are published manually by the user.
 
 1. **Bump the version** in the relevant `Cargo.toml` files:
    - `crates/spadebox-core/Cargo.toml`
-   - `crates/spadebox-mcp/Cargo.toml` — also update the `spadebox-core` dependency version
+   - `mcp/Cargo.toml` — also update the `spadebox-core` dependency version
    - `crates/spadebox-cli/Cargo.toml` — also update the `spadebox-core` dependency version
    - `rust/Cargo.toml` — also update the `spadebox-core` dependency version
 

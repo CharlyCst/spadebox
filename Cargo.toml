@@ -4,10 +4,10 @@ members = [
     "js",
     "python",
     "rust",
+    "mcp",
 
     # Internal crates
     "crates/spadebox-core",
-    "crates/spadebox-mcp",
     "crates/spadebox-cli",
 
     # Tests and examples
