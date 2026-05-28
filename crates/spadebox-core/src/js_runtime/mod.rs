@@ -1,6 +1,9 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-use boa_engine::{Context, JsNativeError, JsValue, Module, NativeFunction, Source, builtins::promise::PromiseState, js_string};
+use boa_engine::{
+    Context, JsNativeError, JsValue, Module, NativeFunction, Source,
+    builtins::promise::PromiseState, js_string,
+};
 
 use crate::{AsArc, Sandbox, ToolError, ToolResult};
 
@@ -125,9 +128,14 @@ impl JsContext {
         job_result.map_err(|e| ToolError::JsError(e.to_string()))?;
 
         match promise.state() {
-            PromiseState::Fulfilled(_) => Ok(JsOutput { value: String::new(), console }),
+            PromiseState::Fulfilled(_) => Ok(JsOutput {
+                value: String::new(),
+                console,
+            }),
             PromiseState::Rejected(reason) => Err(ToolError::JsError(reason.display().to_string())),
-            PromiseState::Pending => Err(ToolError::JsError("module did not finish evaluating".to_string())),
+            PromiseState::Pending => Err(ToolError::JsError(
+                "module did not finish evaluating".to_string(),
+            )),
         }
     }
 

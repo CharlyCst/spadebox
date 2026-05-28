@@ -42,7 +42,7 @@ interface Result {
   error?: string
 }
 
-async function runTest(file: string): Promise<Result> {
+async function runTest(file: string, tempDir: string): Promise<Result> {
   const source = await Deno.readTextFile(join(JS_EXEC_DIR, file))
   const expected = parseExpected(source)
   if (expected === null) {
@@ -50,8 +50,7 @@ async function runTest(file: string): Promise<Result> {
   }
 
   const { code, stdout, stderr } = await new Deno.Command(CLI, {
-    args: ['run', 'js_exec', JSON.stringify({ path: file })],
-    cwd: JS_EXEC_DIR,
+    args: ['--root', tempDir, 'run', 'js_exec', JSON.stringify({ path: file })],
     stdout: 'piped',
     stderr: 'piped',
   }).output()
@@ -81,7 +80,15 @@ async function main() {
 
   console.log(`\nRunning ${files.length} test(s)...\n`)
 
-  const results = await Promise.all(files.map(runTest))
+  const tempDir = await Deno.makeTempDir()
+  await Promise.all(files.map((f) => Deno.copyFile(join(JS_EXEC_DIR, f), join(tempDir, f))))
+
+  let results: Result[]
+  try {
+    results = await Promise.all(files.map((f) => runTest(f, tempDir)))
+  } finally {
+    await Deno.remove(tempDir, { recursive: true })
+  }
   let passed = 0
   let failed = 0
 

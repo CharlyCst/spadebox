@@ -55,7 +55,8 @@ impl Tool for JsExecTool {
             let funcs = sandbox.js.funcs.read().unwrap();
             ctx.register_funcs(&funcs)?;
             drop(funcs);
-            ctx.eval_module(&code).map(|output| output.console.join("\n"))
+            ctx.eval_module(&code)
+                .map(|output| output.console.join("\n"))
         })
         .await
         .map_err(|e| ToolError::JsError(e.to_string()))?
@@ -201,9 +202,14 @@ console.log(content);"#,
         )
         .unwrap();
 
-        let result = JsExecTool::run(&sandbox, JsExecParams { path: "script.js".into() })
-            .await
-            .unwrap();
+        let result = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "script.js".into(),
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(result, "hello from module");
     }
 
@@ -217,9 +223,14 @@ console.log(x);"#,
         )
         .unwrap();
 
-        let result = JsExecTool::run(&sandbox, JsExecParams { path: "script.js".into() })
-            .await
-            .unwrap();
+        let result = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "script.js".into(),
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(result, "42");
     }
 
