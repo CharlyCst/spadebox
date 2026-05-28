@@ -55,7 +55,7 @@ impl Tool for JsExecTool {
             let funcs = sandbox.js.funcs.read().unwrap();
             ctx.register_funcs(&funcs)?;
             drop(funcs);
-            ctx.eval(&code).map(|output| output.console.join("\n"))
+            ctx.eval_module(&code).map(|output| output.console.join("\n"))
         })
         .await
         .map_err(|e| ToolError::JsError(e.to_string()))?
@@ -187,6 +187,40 @@ mod tests {
         .await
         .unwrap_err();
         assert!(matches!(err, ToolError::PermissionDenied(_)));
+    }
+
+    #[tokio::test]
+    async fn import_fs_works() {
+        let (dir, sandbox) = setup();
+        std::fs::write(
+            dir.path().join("script.js"),
+            r#"import { readFileSync, writeFileSync } from "node:fs";
+writeFileSync("out.txt", "hello from module");
+const content = readFileSync("out.txt");
+console.log(content);"#,
+        )
+        .unwrap();
+
+        let result = JsExecTool::run(&sandbox, JsExecParams { path: "script.js".into() })
+            .await
+            .unwrap();
+        assert_eq!(result, "hello from module");
+    }
+
+    #[tokio::test]
+    async fn top_level_await_works() {
+        let (dir, sandbox) = setup();
+        std::fs::write(
+            dir.path().join("script.js"),
+            r#"const x = await Promise.resolve(42);
+console.log(x);"#,
+        )
+        .unwrap();
+
+        let result = JsExecTool::run(&sandbox, JsExecParams { path: "script.js".into() })
+            .await
+            .unwrap();
+        assert_eq!(result, "42");
     }
 
     #[tokio::test]

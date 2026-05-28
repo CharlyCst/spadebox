@@ -1,6 +1,6 @@
 use std::{cell::RefCell, rc::Rc, sync::Arc};
 
-use boa_engine::{Context, JsNativeError, JsValue, NativeFunction, Source, js_string};
+use boa_engine::{Context, JsNativeError, JsValue, Module, NativeFunction, Source, builtins::promise::PromiseState, js_string};
 
 use crate::{AsArc, Sandbox, ToolError, ToolResult};
 
@@ -105,6 +105,30 @@ impl JsContext {
             self.register_func(name, params, Arc::clone(func))?;
         }
         Ok(())
+    }
+
+    /// Evaluates `code` as an ES module and returns any captured console output.
+    ///
+    /// Unlike [`eval`](Self::eval), this runs in module mode: `import`/`export`
+    /// declarations and top-level `await` are supported. The module is fully
+    /// loaded and evaluated before returning; the job queue is drained so that
+    /// all async work settles. There is no "last expression" value — only
+    /// console output is captured.
+    pub fn eval_module(&mut self, code: &str) -> ToolResult<JsOutput> {
+        let module = Module::parse(Source::from_bytes(code.as_bytes()), None, &mut self.ctx)
+            .map_err(|e| ToolError::JsError(e.to_string()))?;
+
+        let promise = module.load_link_evaluate(&mut self.ctx);
+        let job_result = self.ctx.run_jobs();
+        let console = self.console_output.borrow_mut().drain(..).collect();
+
+        job_result.map_err(|e| ToolError::JsError(e.to_string()))?;
+
+        match promise.state() {
+            PromiseState::Fulfilled(_) => Ok(JsOutput { value: String::new(), console }),
+            PromiseState::Rejected(reason) => Err(ToolError::JsError(reason.display().to_string())),
+            PromiseState::Pending => Err(ToolError::JsError("module did not finish evaluating".to_string())),
+        }
     }
 
     /// Evaluates `code` and returns the result along with any captured console output.
