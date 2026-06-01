@@ -1,5 +1,5 @@
 /**
- * Stateless mock LLM server implementing the OpenAI chat completions API.
+ * Stateless mock server implementing the OpenAI chat completions API.
  *
  * Scenarios are defined in scenarios/mod.ts. The server selects the active
  * scenario by matching the first user message (stripped of whitespace) against
@@ -10,27 +10,24 @@
  * If the first user message does not match any scenario ID, the server replies
  * with an explanation and the list of available scenario IDs.
  *
- * Usage:
- *   deno run --allow-net mod.ts [--port <port>]
+ * Library usage:
+ *   import { start } from './mod.ts'
+ *   const server = await start()           // listens on a random port
+ *   const server = await start({ port: 8324 })
+ *   await server.shutdown()
  *
- * Endpoints:
- *   POST /v1/chat/completions  — OpenAI-compatible chat completions
- *   POST /shutdown             — graceful shutdown
+ * CLI usage: see main.ts
  */
 
 import type { ChatCompletionRequest, Message, ScenarioTurn, ToolCall } from './types.ts'
 import { scenarios } from './scenarios/mod.ts'
 
+export type { Scenario, ScenarioTurn } from './types.ts'
+
 // =============================================================================
 // Stateless turn reconstruction
 // =============================================================================
 
-/**
- * Scans all user messages in order for the first one that matches a scenario ID.
- * Walks the subsequent history to count completed turns and build a variable map
- * from any `capture` fields: the first tool result following each assistant
- * message is stored under the turn's capture name.
- */
 function resolveScenario(
   messages: Message[],
 ): { scenarioId: string; turnIndex: number; vars: Record<string, string> } | null {
@@ -160,41 +157,64 @@ async function chatCompletions(req: Request): Promise<Response> {
   return buildChatResponse(scenario.turns[turnIndex], body.model, vars)
 }
 
-let shutdownResolve!: () => void
-const shutdownPromise = new Promise<void>((res) => (shutdownResolve = res))
+// =============================================================================
+// Public API
+// =============================================================================
 
-function shutdown(): Response {
-  shutdownResolve()
-  return json({ ok: true })
+export interface ServerHandle {
+  /** The port the server is actually listening on. */
+  port: number
+  /** Shut down the server and wait for it to finish. */
+  shutdown(): Promise<void>
+  /** Resolves when the server has stopped (whether via shutdown() or the /shutdown endpoint). */
+  finished: Promise<void>
 }
 
-// =============================================================================
-// HTTP handler
-// =============================================================================
+/**
+ * Starts the mock OpenAI API server and resolves once it is ready to accept connections.
+ *
+ * @param options.port - Port to listen on. Defaults to 0 (OS-assigned random port).
+ */
+export function start(options?: { port?: number }): Promise<ServerHandle> {
+  const port = options?.port ?? 0
 
-function handler(req: Request): Promise<Response> | Response {
-  const { method, url } = req
-  const path = new URL(url).pathname
+  let triggerShutdown!: () => void
+  const shutdownRequested = new Promise<void>((res) => (triggerShutdown = res))
 
-  if (method === 'POST' && path === '/v1/chat/completions') return chatCompletions(req)
-  if (method === 'POST' && path === '/shutdown') return shutdown()
+  let signalFinished!: () => void
+  const finishedPromise = new Promise<void>((res) => (signalFinished = res))
 
-  return new Response('Not Found', { status: 404 })
+  return new Promise<ServerHandle>((resolveReady) => {
+    const server = Deno.serve(
+      {
+        port,
+        onListen: ({ port: actualPort }) => {
+          resolveReady({
+            port: actualPort,
+            finished: finishedPromise,
+            shutdown: async () => {
+              triggerShutdown()
+              await finishedPromise
+            },
+          })
+        },
+      },
+      (req: Request): Promise<Response> | Response => {
+        const { method, url } = req
+        const path = new URL(url).pathname
+
+        if (method === 'POST' && path === '/v1/chat/completions') return chatCompletions(req)
+        if (method === 'POST' && path === '/shutdown') {
+          triggerShutdown()
+          return json({ ok: true })
+        }
+
+        return new Response('Not Found', { status: 404 })
+      },
+    )
+
+    // Wire up after `server` is assigned — onListen fires synchronously inside Deno.serve()
+    shutdownRequested.then(() => server.shutdown())
+    server.finished.then(signalFinished)
+  })
 }
-
-// =============================================================================
-// Main
-// =============================================================================
-
-const args = Deno.args
-const portFlag = args.indexOf('--port')
-const port = portFlag !== -1 ? parseInt(args[portFlag + 1]) : 8324
-
-const server = Deno.serve(
-  { port, onListen: ({ port: p }) => console.log(`READY:${p}`) },
-  handler,
-)
-
-await shutdownPromise
-server.shutdown()
-await server.finished

@@ -9,4 +9,4 @@ LLM_MODEL=gpt-4o \
   cargo run -p example --example agent -- /path/to/sandbox
 ```
 
-Omit `LLM_BASE_URL` to use the local mock server (`examples/mock_llm_server`).
+Omit `LLM_BASE_URL` to use the local mock server (`tests/mock_openai_api`).

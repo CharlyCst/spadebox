@@ -1,7 +1,7 @@
 {
-  "workspace": ["js/", "tests/runner/", "examples/mock_llm_server/", "examples/js/", "website/"],
+  "workspace": ["js/", "tests/runner/", "tests/mock_openai_api/", "examples/js/", "website/"],
   "tasks": {
-    "mock-server": "deno run --allow-net examples/mock_llm_server/mod.ts",
+    "mock-server": "deno run --allow-net tests/mock_openai_api/main.ts",
     "website": "cd website && deno run start",
     "website:update": "deno run --allow-run --allow-read --allow-write website/scripts/generate-tools.ts && deno run --allow-read --allow-write website/scripts/inject-snippets.ts",
     "test": "deno run --allow-run --allow-read --allow-write tests/runner/main.ts"
