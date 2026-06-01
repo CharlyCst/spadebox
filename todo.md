@@ -29,6 +29,7 @@
 - [x] Add support for case insensitivity. (no need to, the `(?i)` flag is sufficient)
 - [ ] Add support for limitting output size to N matches, where N is big enough but not too much (100?).
 - [ ] Respect .gitignore? (We really don't want to match stuff in node_modules)
+- [ ] Add support for showing surrounding lines (e.g. `grep -A 5`)
 
 ## Glob
 
