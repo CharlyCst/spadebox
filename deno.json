@@ -4,7 +4,7 @@
     "mock-server": "deno run --allow-net tests/mock_openai_api/main.ts",
     "website": "cd website && deno run start",
     "website:update": "deno run --allow-run --allow-read --allow-write website/scripts/generate-tools.ts && deno run --allow-read --allow-write website/scripts/inject-snippets.ts",
-    "test": "deno run --allow-run --allow-read --allow-write tests/runner/main.ts"
+    "test": "deno run --allow-run --allow-read --allow-write --allow-net --allow-env tests/runner/main.ts"
   },
   "nodeModulesDir": "auto",
   "fmt": {

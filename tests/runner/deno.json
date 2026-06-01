@@ -1,5 +1,8 @@
 {
+  "imports": {
+    "@std/path": "jsr:@std/path@^1.1.4"
+  },
   "tasks": {
-    "test": "deno run --allow-run --allow-read --allow-write main.ts"
+    "test": "deno run --allow-run --allow-read --allow-write --allow-net --allow-env main.ts"
   }
 }
