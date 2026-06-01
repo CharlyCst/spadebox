@@ -4,6 +4,7 @@
     "jsr:@std/assert@1": "1.0.19",
     "jsr:@std/internal@^1.0.12": "1.0.12",
     "jsr:@std/path@*": "1.1.4",
+    "jsr:@std/path@1": "1.1.4",
     "jsr:@std/path@^1.1.4": "1.1.4",
     "npm:@docusaurus/core@3.10.0": "3.10.0_@docusaurus+faster@3.10.0__@docusaurus+types@3.10.0___react@19.2.5___react-dom@19.2.5____react@19.2.5__react@19.2.5__react-dom@19.2.5___react@19.2.5_@mdx-js+react@3.1.1__@types+react@19.2.14__react@19.2.5_react@19.2.5_react-dom@19.2.5__react@19.2.5_@docusaurus+types@3.10.0__react@19.2.5__react-dom@19.2.5___react@19.2.5_@types+react@19.2.14_typescript@6.0.2",
     "npm:@docusaurus/faster@3.10.0": "3.10.0_@docusaurus+types@3.10.0__react@19.2.5__react-dom@19.2.5___react@19.2.5_react@19.2.5_react-dom@19.2.5__react@19.2.5",
