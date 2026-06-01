@@ -335,6 +335,9 @@ impl SpadeBox {
   ) -> napi::Result<This<'env>> {
     let tsfn = func
       .build_threadsafe_function::<serde_json::Value>()
+      // Weak ref: does not prevent process exit — host functions are only called during
+      // jsRepl/jsExec evaluations, so they should not hold the event loop open independently.
+      .weak::<true>()
       .build_callback(|ctx: ThreadsafeCallContext<serde_json::Value>| Ok(ctx.value))?;
 
     let inner = Arc::clone(&self.inner);

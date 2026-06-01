@@ -2,7 +2,7 @@ import { runJsRuntime, type JsRuntimeResult } from './js_runtime.ts'
 import { runExamples, type ExampleResult } from './examples.ts'
 
 function reportJsRuntime(results: JsRuntimeResult[]): number {
-  console.log(`\nJS runtime (${results.length} test(s))\n`)
+  console.log(`\nJS runtime (${results.length} tests)\n`)
   let failed = 0
   for (const r of results) {
     if (r.pass) {
@@ -18,7 +18,7 @@ function reportJsRuntime(results: JsRuntimeResult[]): number {
 }
 
 function reportExamples(results: ExampleResult[]): number {
-  console.log(`\nExamples (${results.length} test(s))\n`)
+  console.log(`\nExamples (${results.length} tests)\n`)
   let failed = 0
   for (const r of results) {
     if (r.pass) {

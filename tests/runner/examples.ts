@@ -56,16 +56,19 @@ async function runAgent(
   return { name, scenario, pass, output: output.trim(), error }
 }
 
-function runRust(scenario: string, sandbox: string, port: number): Promise<ExampleResult> {
-  return runAgent('rust', scenario, ['cargo', 'run', '--quiet', '-p', 'example', '--example', 'agent', '--', sandbox], REPO_ROOT, port)
+function runRust(pkg: string, example: string) {
+  return (scenario: string, sandbox: string, port: number): Promise<ExampleResult> =>
+    runAgent(`rust/${pkg}/${example}`, scenario, ['cargo', 'run', '--quiet', '-p', pkg, '--example', example, '--', sandbox], REPO_ROOT, port)
 }
 
-function runJs(scenario: string, sandbox: string, port: number): Promise<ExampleResult> {
-  return runAgent('js', scenario, ['deno', 'run', '-P', 'agent.ts', sandbox], JS_EXAMPLE_DIR, port)
+function runJs(file: string) {
+  return (scenario: string, sandbox: string, port: number): Promise<ExampleResult> =>
+    runAgent(`js/${file}`, scenario, ['deno', 'run', '-P', file, sandbox], JS_EXAMPLE_DIR, port)
 }
 
-function runPython(scenario: string, sandbox: string, port: number): Promise<ExampleResult> {
-  return runAgent('python', scenario, ['uv', 'run', 'agent.py', sandbox], PYTHON_EXAMPLE_DIR, port)
+function runPython(file: string) {
+  return (scenario: string, sandbox: string, port: number): Promise<ExampleResult> =>
+    runAgent(`python/${file}`, scenario, ['uv', 'run', file, sandbox], PYTHON_EXAMPLE_DIR, port)
 }
 
 interface ExampleTest {
@@ -75,12 +78,13 @@ interface ExampleTest {
 }
 
 const TESTS: ExampleTest[] = [
-  { name: 'rust', scenario: 'read_file', runner: runRust },
-  { name: 'rust', scenario: 'fetch', runner: runRust },
-  { name: 'js', scenario: 'read_file', runner: runJs },
-  { name: 'js', scenario: 'fetch', runner: runJs },
-  { name: 'python', scenario: 'read_file', runner: runPython },
-  { name: 'python', scenario: 'fetch', runner: runPython },
+  { name: 'rust/example/agent', scenario: 'read_file', runner: runRust('example', 'agent') },
+  { name: 'rust/example/agent', scenario: 'fetch', runner: runRust('example', 'agent') },
+  { name: 'js/agent.ts', scenario: 'read_file', runner: runJs('agent.ts') },
+  { name: 'js/agent.ts', scenario: 'fetch', runner: runJs('agent.ts') },
+  { name: 'js/subagent.ts', scenario: 'subagent', runner: runJs('subagent.ts') },
+  { name: 'python/agent.py', scenario: 'read_file', runner: runPython('agent.py') },
+  { name: 'python/agent.py', scenario: 'fetch', runner: runPython('agent.py') },
 ]
 
 export async function runExamples(): Promise<ExampleResult[]> {
