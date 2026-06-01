@@ -47,6 +47,18 @@ pub struct GrepParams {
     /// Defaults to 0 (matched lines only).
     #[serde(default)]
     pub context_lines: u32,
+
+    /// Maximum number of matches to return across all files. Defaults to 100.
+    /// Set to 0 to return all matches (use with care on large repos).
+    #[serde(default = "default_max_matches")]
+    pub max_matches: u32,
+}
+
+/// Default cap on grep matches (used when `max_matches` is not specified).
+pub const DEFAULT_MAX_MATCHES: u32 = 100;
+
+fn default_max_matches() -> u32 {
+    DEFAULT_MAX_MATCHES
 }
 
 // ---------------------------------------------------------------------------
@@ -62,7 +74,8 @@ impl Tool for GrepTool {
         Search file contents for a regex pattern (ripgrep). \
         Returns matching lines with their file path and line number. \
         Use 'glob' to restrict the search to specific file types (e.g. '**/*.rs'). \
-        Use 'context_lines' to include N surrounding lines around each match.";
+        Use 'context_lines' to include N surrounding lines around each match. \
+        Use 'max_matches' to control the result cap (default 100; 0 = unlimited).";
 
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: GrepParams) -> ToolResult<String> {
         // Compile the regex eagerly on the calling thread so we can return a
@@ -76,17 +89,37 @@ impl Tool for GrepTool {
 
         let sandbox = sandbox.as_arc();
         let context_lines = params.context_lines as usize;
+        // 0 means unlimited; map to usize::MAX for arithmetic convenience.
+        let limit = if params.max_matches == 0 {
+            usize::MAX
+        } else {
+            params.max_matches as usize
+        };
 
         // Directory walking and grep-searcher are both synchronous. Run them on
         // a dedicated blocking thread to avoid stalling the async executor.
         let output = tokio::task::spawn_blocking(move || {
             let mut lines: Vec<String> = Vec::new();
+            let mut match_count: usize = 0;
             let fs_config = sandbox.files.read().unwrap();
             let root = fs_config.root.as_ref().expect("Missing sandbox root");
             walk(root, "", &glob_set, &mut |dir, name, display_path| {
-                search_file(dir, name, display_path, &matcher, context_lines, &mut lines)
+                if match_count >= limit {
+                    return Ok(());
+                }
+                let remaining = limit - match_count;
+                let found =
+                    search_file(dir, name, display_path, &matcher, context_lines, remaining, &mut lines)?;
+                match_count += found;
+                Ok(())
             })?;
-            Ok::<String, ToolError>(format_output(&lines))
+            let mut output = format_output(&lines);
+            if match_count >= limit && limit != usize::MAX {
+                output.push_str(&format!(
+                    "\n<warning>Output truncated: showing first {limit} matches</warning>"
+                ));
+            }
+            Ok::<String, ToolError>(output)
         })
         .await
         .map_err(|e| ToolError::IoError(io::Error::other(e)))??;
@@ -112,14 +145,20 @@ impl Tool for GrepTool {
 /// `grep-searcher` receives a `std::io::Read` derived from the cap-std `File`.
 /// No path string is involved from this point onward — the search operates
 /// entirely on the already-opened file descriptor.
+/// Returns the number of matches found in the file.
+///
+/// `remaining` is the number of matches still allowed before the cap is hit;
+/// `usize::MAX` means unlimited.  The sink stops after `remaining` matches,
+/// so the caller only needs to add the returned count to its running total.
 fn search_file(
     dir: &Dir,
     name: &str,
     display_path: &str,
     matcher: &RegexMatcher,
     context_lines: usize,
+    remaining: usize,
     out: &mut Vec<String>,
-) -> ToolResult<()> {
+) -> ToolResult<usize> {
     // SANDBOX: fd-relative open, enforced by cap-std / RESOLVE_BENEATH.
     let file = dir.open(name).map_err(|e| map_io_err(display_path, e))?;
 
@@ -138,11 +177,15 @@ fn search_file(
         path: display_path,
         out,
         last_line: None,
+        match_count: 0,
+        limit: remaining,
     };
 
     searcher
         .search_reader(matcher, std_file, &mut sink)
-        .map_err(ToolError::IoError)
+        .map_err(ToolError::IoError)?;
+
+    Ok(sink.match_count)
 }
 
 // ---------------------------------------------------------------------------
@@ -161,6 +204,10 @@ struct MatchSink<'a> {
     /// Line number of the most recently emitted line, used to detect gaps
     /// between match groups and insert `--` separators.
     last_line: Option<u64>,
+    /// Number of matches found so far in this file.
+    match_count: usize,
+    /// Cap on matches for this file (`usize::MAX` = unlimited).
+    limit: usize,
 }
 
 impl MatchSink<'_> {
@@ -190,8 +237,10 @@ impl Sink for MatchSink<'_> {
         self.out
             .push(format!("{}:{}:{}", self.path, line_no, content.trim_end()));
         self.last_line = Some(line_no);
+        self.match_count += 1;
 
-        Ok(true) // returning false would stop searching this file
+        // Return false to stop searching this file once the cap is hit.
+        Ok(self.match_count < self.limit)
     }
 
     fn context(
@@ -258,6 +307,7 @@ mod tests {
                 pattern: "hello".to_string(),
                 glob: None,
                 context_lines: 0,
+                max_matches: 0,
             },
         )
         .await
@@ -279,6 +329,7 @@ mod tests {
                 pattern: "let x".to_string(),
                 glob: Some("**/*.rs".to_string()),
                 context_lines: 0,
+                max_matches: 0,
             },
         )
         .await
@@ -301,6 +352,7 @@ mod tests {
                 pattern: "let x".to_string(),
                 glob: Some("/src/**/*.rs".to_string()),
                 context_lines: 0,
+                max_matches: 0,
             },
         )
         .await
@@ -321,6 +373,7 @@ mod tests {
                 pattern: "xyzzy".to_string(),
                 glob: None,
                 context_lines: 0,
+                max_matches: 0,
             },
         )
         .await
@@ -344,6 +397,7 @@ mod tests {
                 pattern: "MATCH".to_string(),
                 glob: None,
                 context_lines: 1,
+                max_matches: 0,
             },
         )
         .await
@@ -363,6 +417,7 @@ mod tests {
                 pattern: "[invalid".to_string(),
                 glob: None,
                 context_lines: 0,
+                max_matches: 0,
             },
         )
         .await;
@@ -382,11 +437,58 @@ mod tests {
                 pattern: "needle".to_string(),
                 glob: None,
                 context_lines: 0,
+                max_matches: 0,
             },
         )
         .await
         .unwrap();
 
         assert!(result.contains("sub/deep.rs:1:"), "got: {result}");
+    }
+
+    #[tokio::test]
+    async fn max_matches_truncates_results() {
+        let (dir, sandbox) = setup();
+        // 5 matching lines across two files
+        fs::write(dir.path().join("a.txt"), "hit\nhit\nhit\n").unwrap();
+        fs::write(dir.path().join("b.txt"), "hit\nhit\n").unwrap();
+
+        let result = GrepTool::run(
+            &sandbox,
+            GrepParams {
+                pattern: "hit".to_string(),
+                glob: None,
+                context_lines: 0,
+                max_matches: 3,
+            },
+        )
+        .await
+        .unwrap();
+
+        let match_lines: Vec<&str> = result.lines().filter(|l| l.contains(":hit")).collect();
+        assert_eq!(match_lines.len(), 3, "expected 3 matches, got: {result}");
+        assert!(result.contains("<warning>"), "expected truncation warning, got: {result}");
+    }
+
+    #[tokio::test]
+    async fn max_matches_zero_returns_all() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("a.txt"), "hit\nhit\nhit\n").unwrap();
+
+        let result = GrepTool::run(
+            &sandbox,
+            GrepParams {
+                pattern: "hit".to_string(),
+                glob: None,
+                context_lines: 0,
+                max_matches: 0,
+            },
+        )
+        .await
+        .unwrap();
+
+        let match_lines: Vec<&str> = result.lines().filter(|l| l.contains(":hit")).collect();
+        assert_eq!(match_lines.len(), 3, "got: {result}");
+        assert!(!result.contains("<warning>"), "got: {result}");
     }
 }

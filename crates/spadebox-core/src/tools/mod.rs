@@ -16,8 +16,8 @@ mod write;
 
 pub use edit::{EditFileTool, EditParams};
 pub use fetch::{FetchParams, FetchTool};
-pub use glob::{GlobParams, GlobTool};
-pub use grep::{GrepParams, GrepTool};
+pub use glob::{DEFAULT_MAX_RESULTS, GlobParams, GlobTool};
+pub use grep::{DEFAULT_MAX_MATCHES, GrepParams, GrepTool};
 pub use js_exec::{JsExecParams, JsExecTool};
 pub use js_repl::{JsReplParams, JsReplTool};
 pub use r#move::{MoveParams, MoveTool};

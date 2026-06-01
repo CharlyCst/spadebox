@@ -127,6 +127,18 @@ pub struct GlobParams {
     /// Glob pattern to match file paths against
     /// (e.g. `"**/*.rs"`, `"src/**/*.ts"`, `"**/mod.rs"`).
     pub pattern: String,
+
+    /// Maximum number of results to return. Defaults to 300.
+    /// Set to 0 to return all matches.
+    #[serde(default = "default_max_results")]
+    pub max_results: u32,
+}
+
+/// Default cap on glob results (used when `max_results` is not specified).
+pub const DEFAULT_MAX_RESULTS: u32 = 300;
+
+fn default_max_results() -> u32 {
+    DEFAULT_MAX_RESULTS
 }
 
 // ---------------------------------------------------------------------------
@@ -142,7 +154,8 @@ impl Tool for GlobTool {
         List files matching a glob pattern. \
         Returns a newline-separated list of relative file paths sorted alphabetically. \
         Use `**` to match across directories (e.g. `**/*.rs` finds all Rust files, \
-        `src/**/*.ts` finds TypeScript files under src/).";
+        `src/**/*.ts` finds TypeScript files under src/). \
+        Use 'max_results' to control the result cap (default 300; 0 = unlimited).";
 
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: GlobParams) -> ToolResult<String> {
         let sandbox = sandbox.as_arc();
@@ -150,6 +163,12 @@ impl Tool for GlobTool {
         // Compile the glob pattern eagerly on the calling thread so we can
         // return a structured error before touching the filesystem.
         let glob_set = build_glob_set(Some(&params.pattern))?;
+
+        let limit = if params.max_results == 0 {
+            usize::MAX
+        } else {
+            params.max_results as usize
+        };
 
         // Directory walking is synchronous. Run on a dedicated blocking thread
         // to avoid stalling the async executor.
@@ -165,7 +184,17 @@ impl Tool for GlobTool {
             })?;
 
             paths.sort();
-            Ok::<String, ToolError>(format_output(&paths))
+            let truncated = limit != usize::MAX && paths.len() > limit;
+            if truncated {
+                paths.truncate(limit);
+            }
+            let mut output = format_output(&paths);
+            if truncated {
+                output.push_str(&format!(
+                    "\n<warning>Output truncated: showing first {limit} results</warning>"
+                ));
+            }
+            Ok::<String, ToolError>(output)
         })
         .await
         .map_err(|e| ToolError::IoError(io::Error::other(e)))??;
@@ -216,6 +245,7 @@ mod tests {
             &sandbox,
             GlobParams {
                 pattern: "**/*.rs".to_string(),
+                max_results: 0,
             },
         )
         .await
@@ -237,6 +267,7 @@ mod tests {
             &sandbox,
             GlobParams {
                 pattern: "src/**/*.rs".to_string(),
+                max_results: 0,
             },
         )
         .await
@@ -257,6 +288,7 @@ mod tests {
             &sandbox,
             GlobParams {
                 pattern: "**/*.rs".to_string(),
+                max_results: 0,
             },
         )
         .await
@@ -275,6 +307,7 @@ mod tests {
             &sandbox,
             GlobParams {
                 pattern: "**/*.rs".to_string(),
+                max_results: 0,
             },
         )
         .await
@@ -293,6 +326,7 @@ mod tests {
             &sandbox,
             GlobParams {
                 pattern: "/src/**/*.rs".to_string(),
+                max_results: 0,
             },
         )
         .await
@@ -308,10 +342,55 @@ mod tests {
             &sandbox,
             GlobParams {
                 pattern: "[invalid".to_string(),
+                max_results: 0,
             },
         )
         .await;
 
         assert!(matches!(result, Err(ToolError::InvalidPattern(_))));
+    }
+
+    #[tokio::test]
+    async fn max_results_truncates_output() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("a.rs"), "").unwrap();
+        fs::write(dir.path().join("b.rs"), "").unwrap();
+        fs::write(dir.path().join("c.rs"), "").unwrap();
+
+        let result = GlobTool::run(
+            &sandbox,
+            GlobParams {
+                pattern: "**/*.rs".to_string(),
+                max_results: 2,
+            },
+        )
+        .await
+        .unwrap();
+
+        let file_lines: Vec<&str> = result.lines().filter(|l| l.ends_with(".rs")).collect();
+        assert_eq!(file_lines.len(), 2, "expected 2 results, got: {result}");
+        assert!(result.contains("<warning>"), "expected truncation warning, got: {result}");
+    }
+
+    #[tokio::test]
+    async fn max_results_zero_returns_all() {
+        let (dir, sandbox) = setup();
+        fs::write(dir.path().join("a.rs"), "").unwrap();
+        fs::write(dir.path().join("b.rs"), "").unwrap();
+        fs::write(dir.path().join("c.rs"), "").unwrap();
+
+        let result = GlobTool::run(
+            &sandbox,
+            GlobParams {
+                pattern: "**/*.rs".to_string(),
+                max_results: 0,
+            },
+        )
+        .await
+        .unwrap();
+
+        let file_lines: Vec<&str> = result.lines().filter(|l| l.ends_with(".rs")).collect();
+        assert_eq!(file_lines.len(), 3, "got: {result}");
+        assert!(!result.contains("<warning>"), "got: {result}");
     }
 }

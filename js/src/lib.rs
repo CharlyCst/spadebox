@@ -10,9 +10,9 @@ use napi_derive::napi;
 use spadebox_core::{
   DomainRule, HttpVerb, Sandbox, enabled_tools,
   tools::{
-    EditFileTool, EditParams, FetchParams, FetchTool, GlobParams, GlobTool, GrepParams, GrepTool,
-    JsExecParams, JsExecTool, JsReplParams, JsReplTool, MoveParams, MoveTool, ReadFileTool,
-    ReadParams, Tool, WriteFileTool, WriteParams,
+    DEFAULT_MAX_MATCHES, DEFAULT_MAX_RESULTS, EditFileTool, EditParams, FetchParams, FetchTool,
+    GlobParams, GlobTool, GrepParams, GrepTool, JsExecParams, JsExecTool, JsReplParams,
+    JsReplTool, MoveParams, MoveTool, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
   },
 };
 use std::sync::Arc;
@@ -173,7 +173,7 @@ impl SpadeBox {
   /// files under `src/`).
   #[napi]
   pub async fn glob(&self, pattern: String) -> napi::Result<String> {
-    GlobTool::run(&self.inner, GlobParams { pattern })
+    GlobTool::run(&self.inner, GlobParams { pattern, max_results: DEFAULT_MAX_RESULTS })
       .await
       .map_err(to_napi_err)
   }
@@ -197,6 +197,7 @@ impl SpadeBox {
         pattern,
         glob,
         context_lines: context_lines.unwrap_or(0),
+        max_matches: DEFAULT_MAX_MATCHES,
       },
     )
     .await

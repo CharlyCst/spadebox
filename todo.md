@@ -4,7 +4,7 @@
 
 - [x] Add support for limit to read tool (both bytes and max lines), and optional offset parameter for large files (by
       lines or bytes?). We should also add support for limit to other read tools, such as fetch.
-- [ ] Add support for an optional `read_range` parameter. Range are expressed in lines, files are 1-indexed, and -1
+- [x] Add support for an optional `read_range` parameter. Range are expressed in lines, files are 1-indexed, and -1
       means read entire document.
 
 ## Write
@@ -27,16 +27,15 @@
 
 - [x] Add support for base path (default to "/"). (the glob parameter handles that)
 - [x] Add support for case insensitivity. (no need to, the `(?i)` flag is sufficient)
-- [ ] Add support for limitting output size to N matches, where N is big enough but not too much (100?).
+- [x] Add support for limitting output size to N matches, where N is big enough but not too much (100?).
 - [ ] Respect .gitignore? (We really don't want to match stuff in node_modules)
-- [ ] Add support for showing surrounding lines (e.g. `grep -A 5`)
 
 ## Glob
 
 - [ ] Add an optional "depth" parameter to limit the depth of folder explored. Needs clarification: the depth should
       start at the first "**" pattern, are there special edge cases to take care of? Also, probably set a safe default,
       like 5?
-- [ ] Add a limit to the output size (with a reasonable but not too big default)
+- [x] Add a limit to the output size (with a reasonable but not too big default)
 
 ## JS Runtime
 

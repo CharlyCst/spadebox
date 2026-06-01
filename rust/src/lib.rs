@@ -3,9 +3,10 @@ use std::sync::Arc;
 use spadebox_core::{
     DomainRule, HttpVerb, Sandbox, enabled_tools,
     tools::{
-        EditFileTool, EditParams, FetchParams, FetchTool, GlobParams, GlobTool, GrepParams,
-        GrepTool, JsExecParams, JsExecTool, JsReplParams, JsReplTool, MoveParams, MoveTool,
-        ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
+        DEFAULT_MAX_MATCHES, DEFAULT_MAX_RESULTS, EditFileTool, EditParams, FetchParams,
+        FetchTool, GlobParams, GlobTool, GrepParams, GrepTool, JsExecParams, JsExecTool,
+        JsReplParams, JsReplTool, MoveParams, MoveTool, ReadFileTool, ReadParams, Tool,
+        WriteFileTool, WriteParams,
     },
 };
 
@@ -307,6 +308,7 @@ impl SpadeBox {
             &self.inner,
             GlobParams {
                 pattern: pattern.to_owned(),
+                max_results: DEFAULT_MAX_RESULTS,
             },
         )
         .await
@@ -330,6 +332,7 @@ impl SpadeBox {
                 pattern: pattern.to_owned(),
                 glob: glob.map(str::to_owned),
                 context_lines,
+                max_matches: DEFAULT_MAX_MATCHES,
             },
         )
         .await
