@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.0] - 2026-06-01
+
+### Added
+
+- **`expose_js_func`**: Expose native Rust/JS/Python functions to the embedded JavaScript runtime, including async
+  function support.
+- **Public Rust API**: New `spadebox` crate with a user-friendly high-level interface.
+- **`grep`/`glob` default result limit**: Tools now cap output and include a `<warning>` when results are truncated.
+- **`js_exec` ES module support**: Scripts are evaluated as ES modules, enabling top-level `import` statements.
+- **CLI `--root` parameter**: Choose the sandbox root directory from the command line.
+- **JS subagent example**: Example showing how to use Spadebox to spawn subagents from the JS runtime.
+
 ## [0.4.0] - 2026-05-09
 
 ### Added

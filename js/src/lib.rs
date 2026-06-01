@@ -11,8 +11,8 @@ use spadebox_core::{
   DomainRule, HttpVerb, Sandbox, enabled_tools,
   tools::{
     DEFAULT_MAX_MATCHES, DEFAULT_MAX_RESULTS, EditFileTool, EditParams, FetchParams, FetchTool,
-    GlobParams, GlobTool, GrepParams, GrepTool, JsExecParams, JsExecTool, JsReplParams,
-    JsReplTool, MoveParams, MoveTool, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
+    GlobParams, GlobTool, GrepParams, GrepTool, JsExecParams, JsExecTool, JsReplParams, JsReplTool,
+    MoveParams, MoveTool, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
   },
 };
 use std::sync::Arc;
@@ -173,9 +173,15 @@ impl SpadeBox {
   /// files under `src/`).
   #[napi]
   pub async fn glob(&self, pattern: String) -> napi::Result<String> {
-    GlobTool::run(&self.inner, GlobParams { pattern, max_results: DEFAULT_MAX_RESULTS })
-      .await
-      .map_err(to_napi_err)
+    GlobTool::run(
+      &self.inner,
+      GlobParams {
+        pattern,
+        max_results: DEFAULT_MAX_RESULTS,
+      },
+    )
+    .await
+    .map_err(to_napi_err)
   }
 
   /// Search file contents for a regex pattern. Calls the `grep` tool directly.

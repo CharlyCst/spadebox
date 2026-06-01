@@ -1,6 +1,6 @@
 [package]
 name = "spadebox-cli"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 description = "Spadebox tools exposed through a human-friendly CLI"
 license = "MIT"
@@ -11,7 +11,7 @@ name = "spadebox-cli"
 path = "src/main.rs"
 
 [dependencies]
-spadebox-core = { path = "../spadebox-core", version = "0.4.0" }
+spadebox-core = { path = "../spadebox-core", version = "0.5.0" }
 tokio = { workspace = true }
 serde_json = { workspace = true }
 anyhow = { workspace = true }

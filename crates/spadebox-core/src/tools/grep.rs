@@ -108,8 +108,15 @@ impl Tool for GrepTool {
                     return Ok(());
                 }
                 let remaining = limit - match_count;
-                let found =
-                    search_file(dir, name, display_path, &matcher, context_lines, remaining, &mut lines)?;
+                let found = search_file(
+                    dir,
+                    name,
+                    display_path,
+                    &matcher,
+                    context_lines,
+                    remaining,
+                    &mut lines,
+                )?;
                 match_count += found;
                 Ok(())
             })?;
@@ -467,7 +474,10 @@ mod tests {
 
         let match_lines: Vec<&str> = result.lines().filter(|l| l.contains(":hit")).collect();
         assert_eq!(match_lines.len(), 3, "expected 3 matches, got: {result}");
-        assert!(result.contains("<warning>"), "expected truncation warning, got: {result}");
+        assert!(
+            result.contains("<warning>"),
+            "expected truncation warning, got: {result}"
+        );
     }
 
     #[tokio::test]

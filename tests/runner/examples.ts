@@ -58,7 +58,13 @@ async function runAgent(
 
 function runRust(pkg: string, example: string) {
   return (scenario: string, sandbox: string, port: number): Promise<ExampleResult> =>
-    runAgent(`rust/${pkg}/${example}`, scenario, ['cargo', 'run', '--quiet', '-p', pkg, '--example', example, '--', sandbox], REPO_ROOT, port)
+    runAgent(
+      `rust/${pkg}/${example}`,
+      scenario,
+      ['cargo', 'run', '--quiet', '-p', pkg, '--example', example, '--', sandbox],
+      REPO_ROOT,
+      port,
+    )
 }
 
 function runJs(file: string) {

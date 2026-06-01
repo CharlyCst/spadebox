@@ -369,7 +369,10 @@ mod tests {
 
         let file_lines: Vec<&str> = result.lines().filter(|l| l.ends_with(".rs")).collect();
         assert_eq!(file_lines.len(), 2, "expected 2 results, got: {result}");
-        assert!(result.contains("<warning>"), "expected truncation warning, got: {result}");
+        assert!(
+            result.contains("<warning>"),
+            "expected truncation warning, got: {result}"
+        );
     }
 
     #[tokio::test]

@@ -145,5 +145,7 @@ for await (const line of rl) {
   } catch (err) {
     console.error('Error:', err instanceof Error ? err.message : err)
   }
-  try { rl.prompt() } catch { /* stdin closed during the last turn */ }
+  try {
+    rl.prompt()
+  } catch { /* stdin closed during the last turn */ }
 }

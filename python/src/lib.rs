@@ -7,10 +7,10 @@ use pyo3::types::PyTuple;
 use spadebox_core::{
     DomainRule, HttpVerb, Sandbox, enabled_tools,
     tools::{
-        DEFAULT_MAX_MATCHES, DEFAULT_MAX_RESULTS, EditFileTool, EditParams, FetchParams,
-        FetchTool, GlobParams, GlobTool, GrepParams, GrepTool, JsExecParams, JsExecTool,
-        JsReplParams, JsReplTool, MoveParams, MoveTool, ReadFileTool, ReadParams, Tool,
-        WriteFileTool, WriteParams,
+        DEFAULT_MAX_MATCHES, DEFAULT_MAX_RESULTS, EditFileTool, EditParams, FetchParams, FetchTool,
+        GlobParams, GlobTool, GrepParams, GrepTool, JsExecParams, JsExecTool, JsReplParams,
+        JsReplTool, MoveParams, MoveTool, ReadFileTool, ReadParams, Tool, WriteFileTool,
+        WriteParams,
     },
 };
 use std::sync::Arc;
@@ -368,9 +368,15 @@ impl SpadeBox {
         let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
             runtime.block_on(async move {
-                GlobTool::run(&inner, GlobParams { pattern, max_results: DEFAULT_MAX_RESULTS })
-                    .await
-                    .map_err(to_py_err)
+                GlobTool::run(
+                    &inner,
+                    GlobParams {
+                        pattern,
+                        max_results: DEFAULT_MAX_RESULTS,
+                    },
+                )
+                .await
+                .map_err(to_py_err)
             })
         })
     }

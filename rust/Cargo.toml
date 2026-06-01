@@ -1,6 +1,6 @@
 [package]
 name = "spadebox"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2024"
 description = "Shovels for your AI agents"
 license = "MIT"
@@ -8,7 +8,7 @@ repository = "https://github.com/CharlyCst/spadebox"
 readme = "README.md"
 
 [dependencies]
-spadebox-core = { path = "../crates/spadebox-core" }
+spadebox-core = { path = "../crates/spadebox-core", version = "0.5.0" }
 serde_json = { workspace = true }
 thiserror = { workspace = true }
 tokio = { workspace = true }

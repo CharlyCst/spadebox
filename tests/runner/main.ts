@@ -1,5 +1,5 @@
-import { runJsRuntime, type JsRuntimeResult } from './js_runtime.ts'
-import { runExamples, type ExampleResult } from './examples.ts'
+import { type JsRuntimeResult, runJsRuntime } from './js_runtime.ts'
+import { type ExampleResult, runExamples } from './examples.ts'
 
 function reportJsRuntime(results: JsRuntimeResult[]): number {
   console.log(`\nJS runtime (${results.length} tests)\n`)

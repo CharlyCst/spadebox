@@ -1,6 +1,7 @@
 // Output:
 // 42
 
+// deno-lint-ignore require-await
 async function compute(x) {
   return x * 2
 }
