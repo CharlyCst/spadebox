@@ -9,7 +9,6 @@ use super::Tool;
 
 pub struct JsReplTool;
 
-/// Parameters for the `js_repl` tool.
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct JsReplParams {
     /// JavaScript source code to evaluate.

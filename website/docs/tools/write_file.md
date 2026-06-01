@@ -6,6 +6,11 @@ Write text content to a file. Provide a relative path (e.g. 'src/main.rs') and t
 
 ### Arguments
 
+**`path`** (string, required)
+
+Path to the file to write, relative to the sandbox root.
+To create a directory instead of a file, end the path with '/' (e.g. 'src/').
+
 **`content`** (string, optional)
 
 Content to write (UTF-8). Ignored when creating a directory.
@@ -16,36 +21,31 @@ If true, create any missing intermediate directories before writing.
 Required when the parent directory does not yet exist.
 When the path ends with '/', creates the directory (and any parents) without writing a file.
 
-**`path`** (string, required)
-
-Path to the file to write, relative to the sandbox root.
-To create a directory instead of a file, end the path with '/' (e.g. 'src/').
-
 ### Schema
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "WriteParams",
+  "type": "object",
   "properties": {
-    "content": {
-      "default": "",
-      "description": "Content to write (UTF-8). Ignored when creating a directory.",
-      "type": "string"
-    },
-    "create_dirs": {
-      "default": false,
-      "description": "If true, create any missing intermediate directories before writing.\nRequired when the parent directory does not yet exist.\nWhen the path ends with '/', creates the directory (and any parents) without writing a file.",
-      "type": "boolean"
-    },
     "path": {
       "description": "Path to the file to write, relative to the sandbox root.\nTo create a directory instead of a file, end the path with '/' (e.g. 'src/').",
       "type": "string"
+    },
+    "content": {
+      "description": "Content to write (UTF-8). Ignored when creating a directory.",
+      "type": "string",
+      "default": ""
+    },
+    "create_dirs": {
+      "description": "If true, create any missing intermediate directories before writing.\nRequired when the parent directory does not yet exist.\nWhen the path ends with '/', creates the directory (and any parents) without writing a file.",
+      "type": "boolean",
+      "default": false
     }
   },
   "required": [
     "path"
-  ],
-  "title": "WriteParams",
-  "type": "object"
+  ]
 }
 ```

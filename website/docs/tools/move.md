@@ -6,10 +6,14 @@ Move or rename a file or directory, or delete it. Provide 'src' (source) and 'ds
 
 ### Arguments
 
-**`create_dirs`** (boolean, optional)
+**`src`** (string, required)
 
-If true, create any missing intermediate directories for the destination path.
-Defaults to false.
+Source path (file or directory).
+
+**`dst`** (string, optional)
+
+Destination path, relative to the sandbox root.
+Required unless `delete` is true.
 
 **`delete`** (boolean, optional)
 
@@ -17,36 +21,28 @@ If true and `dst` is omitted, delete `src` (file or directory) instead of moving
 Required when `dst` is absent, to confirm the deletion is intentional.
 Defaults to false.
 
-**`dst`** (string, optional)
-
-Destination path, relative to the sandbox root.
-Required unless `delete` is true.
-
 **`overwrite`** (boolean, optional)
 
 If true, overwrite the destination if it already exists.
 When overwriting an existing file, the destination must have been read first.
 Defaults to false.
 
-**`src`** (string, required)
+**`create_dirs`** (boolean, optional)
 
-Source path (file or directory).
+If true, create any missing intermediate directories for the destination path.
+Defaults to false.
 
 ### Schema
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "MoveParams",
+  "type": "object",
   "properties": {
-    "create_dirs": {
-      "default": false,
-      "description": "If true, create any missing intermediate directories for the destination path.\nDefaults to false.",
-      "type": "boolean"
-    },
-    "delete": {
-      "default": false,
-      "description": "If true and `dst` is omitted, delete `src` (file or directory) instead of moving it.\nRequired when `dst` is absent, to confirm the deletion is intentional.\nDefaults to false.",
-      "type": "boolean"
+    "src": {
+      "description": "Source path (file or directory).",
+      "type": "string"
     },
     "dst": {
       "description": "Destination path, relative to the sandbox root.\nRequired unless `delete` is true.",
@@ -55,20 +51,24 @@ Source path (file or directory).
         "null"
       ]
     },
-    "overwrite": {
-      "default": false,
-      "description": "If true, overwrite the destination if it already exists.\nWhen overwriting an existing file, the destination must have been read first.\nDefaults to false.",
-      "type": "boolean"
+    "delete": {
+      "description": "If true and `dst` is omitted, delete `src` (file or directory) instead of moving it.\nRequired when `dst` is absent, to confirm the deletion is intentional.\nDefaults to false.",
+      "type": "boolean",
+      "default": false
     },
-    "src": {
-      "description": "Source path (file or directory).",
-      "type": "string"
+    "overwrite": {
+      "description": "If true, overwrite the destination if it already exists.\nWhen overwriting an existing file, the destination must have been read first.\nDefaults to false.",
+      "type": "boolean",
+      "default": false
+    },
+    "create_dirs": {
+      "description": "If true, create any missing intermediate directories for the destination path.\nDefaults to false.",
+      "type": "boolean",
+      "default": false
     }
   },
   "required": [
     "src"
-  ],
-  "title": "MoveParams",
-  "type": "object"
+  ]
 }
 ```

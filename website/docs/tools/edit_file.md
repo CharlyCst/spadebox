@@ -6,18 +6,18 @@ Replace text within a file. Reads the file, finds the exact string provided in '
 
 ### Arguments
 
-**`new_string`** (string, required)
+**`path`** (string, required)
 
-String to replace it with.
+Path to the file to edit, relative to the sandbox root.
 
 **`old_string`** (string, required)
 
 Exact string to search for. Must appear exactly once unless replace_all is true.
 Include enough surrounding context to uniquely identify the location.
 
-**`path`** (string, required)
+**`new_string`** (string, required)
 
-Path to the file to edit, relative to the sandbox root.
+String to replace it with.
 
 **`replace_all`** (boolean, optional)
 
@@ -28,31 +28,31 @@ If true, replace every occurrence instead of requiring exactly one. Defaults to 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "EditParams",
+  "type": "object",
   "properties": {
-    "new_string": {
-      "description": "String to replace it with.",
+    "path": {
+      "description": "Path to the file to edit, relative to the sandbox root.",
       "type": "string"
     },
     "old_string": {
       "description": "Exact string to search for. Must appear exactly once unless replace_all is true.\nInclude enough surrounding context to uniquely identify the location.",
       "type": "string"
     },
-    "path": {
-      "description": "Path to the file to edit, relative to the sandbox root.",
+    "new_string": {
+      "description": "String to replace it with.",
       "type": "string"
     },
     "replace_all": {
-      "default": false,
       "description": "If true, replace every occurrence instead of requiring exactly one. Defaults to false.",
-      "type": "boolean"
+      "type": "boolean",
+      "default": false
     }
   },
   "required": [
     "path",
     "old_string",
     "new_string"
-  ],
-  "title": "EditParams",
-  "type": "object"
+  ]
 }
 ```

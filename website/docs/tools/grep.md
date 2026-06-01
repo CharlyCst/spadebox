@@ -6,37 +6,36 @@ Search file contents for a regex pattern (ripgrep). Returns matching lines with 
 
 ### Arguments
 
-**`context_lines`** (integer, optional)
+**`pattern`** (string, required)
 
-Number of context lines to show before and after each match.
-Defaults to 0 (matched lines only).
+Regex pattern to search for (e.g. `"fn main"`, `"TODO.*fixme"`, `"(?i)path"`).
 
 **`glob`** (string, optional)
 
 Optional glob to restrict which files are searched
 (e.g. `"**/*.rs"`, `"src/**/*.ts"`). Matches all files when omitted.
 
+**`context_lines`** (integer, optional)
+
+Number of context lines to show before and after each match.
+Defaults to 0 (matched lines only).
+
 **`max_matches`** (integer, optional)
 
 Maximum number of matches to return across all files. Defaults to 100.
 Set to 0 to return all matches (use with care on large repos).
-
-**`pattern`** (string, required)
-
-Regex pattern to search for (e.g. `"fn main"`, `"TODO.*fixme"`, `"(?i)path"`).
 
 ### Schema
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "GrepParams",
+  "type": "object",
   "properties": {
-    "context_lines": {
-      "default": 0,
-      "description": "Number of context lines to show before and after each match.\nDefaults to 0 (matched lines only).",
-      "format": "uint32",
-      "minimum": 0,
-      "type": "integer"
+    "pattern": {
+      "description": "Regex pattern to search for (e.g. `\"fn main\"`, `\"TODO.*fixme\"`, `\"(?i)path\"`).",
+      "type": "string"
     },
     "glob": {
       "description": "Optional glob to restrict which files are searched\n(e.g. `\"**/*.rs\"`, `\"src/**/*.ts\"`). Matches all files when omitted.",
@@ -45,22 +44,23 @@ Regex pattern to search for (e.g. `"fn main"`, `"TODO.*fixme"`, `"(?i)path"`).
         "null"
       ]
     },
-    "max_matches": {
-      "default": 100,
-      "description": "Maximum number of matches to return across all files. Defaults to 100.\nSet to 0 to return all matches (use with care on large repos).",
+    "context_lines": {
+      "description": "Number of context lines to show before and after each match.\nDefaults to 0 (matched lines only).",
+      "type": "integer",
       "format": "uint32",
       "minimum": 0,
-      "type": "integer"
+      "default": 0
     },
-    "pattern": {
-      "description": "Regex pattern to search for (e.g. `\"fn main\"`, `\"TODO.*fixme\"`, `\"(?i)path\"`).",
-      "type": "string"
+    "max_matches": {
+      "description": "Maximum number of matches to return across all files. Defaults to 100.\nSet to 0 to return all matches (use with care on large repos).",
+      "type": "integer",
+      "format": "uint32",
+      "minimum": 0,
+      "default": 100
     }
   },
   "required": [
     "pattern"
-  ],
-  "title": "GrepParams",
-  "type": "object"
+  ]
 }
 ```

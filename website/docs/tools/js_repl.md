@@ -18,7 +18,9 @@ any other state defined in previous calls are available in subsequent ones.
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JsReplParams",
   "description": "Parameters for the `js_repl` tool.",
+  "type": "object",
   "properties": {
     "code": {
       "description": "JavaScript source code to evaluate.\n\nThe evaluation runs in a persistent session: variables, functions, and\nany other state defined in previous calls are available in subsequent ones.",
@@ -27,8 +29,6 @@ any other state defined in previous calls are available in subsequent ones.
   },
   "required": [
     "code"
-  ],
-  "title": "JsReplParams",
-  "type": "object"
+  ]
 }
 ```

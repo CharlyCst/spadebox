@@ -6,65 +6,65 @@ Read the text content of a file. Provide a relative path (e.g. 'src/main.rs' or 
 
 ### Arguments
 
+**`path`** (string, required)
+
+Path to the file to read, relative to the sandbox root.
+
 **`limit`** (integer, optional)
 
 Maximum number of lines to return. Omit to read the entire file.
+
+**`offset`** (integer, optional)
+
+1-indexed line number to start reading from. Defaults to 1 (the beginning of the file).
 
 **`max_bytes`** (integer, optional)
 
 Maximum number of bytes to return (applied after `offset`/`limit` windowing).
 Defaults to 20 000. Set to 0 to disable.
 
-**`offset`** (integer, optional)
-
-1-indexed line number to start reading from. Defaults to 1 (the beginning of the file).
-
-**`path`** (string, required)
-
-Path to the file to read, relative to the sandbox root.
-
 ### Schema
 
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ReadParams",
+  "type": "object",
   "properties": {
-    "limit": {
-      "description": "Maximum number of lines to return. Omit to read the entire file.",
-      "format": "uint64",
-      "minimum": 0,
-      "type": [
-        "integer",
-        "null"
-      ]
-    },
-    "max_bytes": {
-      "description": "Maximum number of bytes to return (applied after `offset`/`limit` windowing).\nDefaults to 20 000. Set to 0 to disable.",
-      "format": "uint64",
-      "minimum": 0,
-      "type": [
-        "integer",
-        "null"
-      ]
-    },
-    "offset": {
-      "description": "1-indexed line number to start reading from. Defaults to 1 (the beginning of the file).",
-      "format": "uint64",
-      "minimum": 0,
-      "type": [
-        "integer",
-        "null"
-      ]
-    },
     "path": {
       "description": "Path to the file to read, relative to the sandbox root.",
       "type": "string"
+    },
+    "limit": {
+      "description": "Maximum number of lines to return. Omit to read the entire file.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
+    },
+    "offset": {
+      "description": "1-indexed line number to start reading from. Defaults to 1 (the beginning of the file).",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
+    },
+    "max_bytes": {
+      "description": "Maximum number of bytes to return (applied after `offset`/`limit` windowing).\nDefaults to 20 000. Set to 0 to disable.",
+      "type": [
+        "integer",
+        "null"
+      ],
+      "format": "uint64",
+      "minimum": 0
     }
   },
   "required": [
     "path"
-  ],
-  "title": "ReadParams",
-  "type": "object"
+  ]
 }
 ```

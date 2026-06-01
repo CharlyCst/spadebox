@@ -16,16 +16,16 @@ pub struct MoveParams {
     /// Destination path, relative to the sandbox root.
     /// Required unless `delete` is true.
     pub dst: Option<String>,
-    /// If true, overwrite the destination if it already exists.
-    /// When overwriting an existing file, the destination must have been read first.
-    /// Defaults to false.
-    #[serde(default, deserialize_with = "deserialize_bool_flexible")]
-    pub overwrite: bool,
     /// If true and `dst` is omitted, delete `src` (file or directory) instead of moving it.
     /// Required when `dst` is absent, to confirm the deletion is intentional.
     /// Defaults to false.
     #[serde(default, deserialize_with = "deserialize_bool_flexible")]
     pub delete: bool,
+    /// If true, overwrite the destination if it already exists.
+    /// When overwriting an existing file, the destination must have been read first.
+    /// Defaults to false.
+    #[serde(default, deserialize_with = "deserialize_bool_flexible")]
+    pub overwrite: bool,
     /// If true, create any missing intermediate directories for the destination path.
     /// Defaults to false.
     #[serde(default, deserialize_with = "deserialize_bool_flexible")]

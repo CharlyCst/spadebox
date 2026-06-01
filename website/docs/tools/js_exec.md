@@ -15,6 +15,8 @@ Path to the JavaScript file to execute.
 ```json
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "JsExecParams",
+  "type": "object",
   "properties": {
     "path": {
       "description": "Path to the JavaScript file to execute.",
@@ -23,8 +25,6 @@ Path to the JavaScript file to execute.
   },
   "required": [
     "path"
-  ],
-  "title": "JsExecParams",
-  "type": "object"
+  ]
 }
 ```
