@@ -85,7 +85,7 @@ const config: Config = {
             },
             {
               label: 'crates.io',
-              href: 'https://crates.io/crates/spadebox-core',
+              href: 'https://crates.io/crates/spadebox',
             },
             {
               label: 'npm',

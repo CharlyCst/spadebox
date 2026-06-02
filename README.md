@@ -10,7 +10,7 @@
   [![crates.io version]][crates-io] [![NPM version]][npm] [![PyPI version]][pypi]
 </div>
 
-[crates-io]: https://crates.io/crates/spadebox-core
+[crates-io]: https://crates.io/crates/spadebox
 [npm]: https://www.npmjs.com/package/@spadebox/spadebox
 [pypi]: https://pypi.org/project/spadebox/
 [crates.io version]: https://img.shields.io/crates/v/spadebox-core
