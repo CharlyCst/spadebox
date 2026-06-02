@@ -7,4 +7,4 @@ dependencies = [
 ]
 
 [tool.uv.sources]
-spadebox = { path = "../../python" }
+spadebox = { workspace = true }

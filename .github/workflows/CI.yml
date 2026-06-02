@@ -150,7 +150,7 @@ jobs:
       - name: Install Python wheel
         working-directory: python
         run: |
-          uv sync --no-install-project
+          uv sync --no-install-workspace
           uv pip install --find-links dist spadebox
       - name: Cargo tests
         run: cargo test
