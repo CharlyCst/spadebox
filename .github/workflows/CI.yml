@@ -40,13 +40,13 @@ jobs:
         settings:
           - host: ubuntu-latest
             target: x86_64-unknown-linux-gnu
-            build-js: npx --yes --package @napi-rs/cli@3 napi build --platform --target x86_64-unknown-linux-gnu
+            build-js: npx --yes --package @napi-rs/cli@3 napi build --platform --target x86_64-unknown-linux-gnu --js napi_generated.js --dts napi_generated.d.ts
           - host: macos-latest
             target: aarch64-apple-darwin
-            build-js: npx --yes --package @napi-rs/cli@3 napi build --platform --target aarch64-apple-darwin
+            build-js: npx --yes --package @napi-rs/cli@3 napi build --platform --target aarch64-apple-darwin --js napi_generated.js --dts napi_generated.d.ts
           - host: ubuntu-24.04-arm
             target: aarch64-unknown-linux-gnu
-            build-js: npx --yes --package @napi-rs/cli@3 napi build --platform --target aarch64-unknown-linux-gnu
+            build-js: npx --yes --package @napi-rs/cli@3 napi build --platform --target aarch64-unknown-linux-gnu --js napi_generated.js --dts napi_generated.d.ts
     name: Build - ${{ matrix.settings.target }}
     runs-on: ${{ matrix.settings.host }}
     steps:
@@ -90,6 +90,25 @@ jobs:
         working-directory: js
         run: ${{ matrix.settings.build-js }}
         shell: bash
+      - name: Setup Deno
+        if: matrix.settings.target == 'x86_64-unknown-linux-gnu'
+        uses: denoland/setup-deno@v2
+        with:
+          deno-version: v2.x
+      - name: Build JS files
+        if: matrix.settings.target == 'x86_64-unknown-linux-gnu'
+        working-directory: js
+        run: deno task build:ts
+      - name: Upload JS files
+        if: matrix.settings.target == 'x86_64-unknown-linux-gnu'
+        uses: actions/upload-artifact@v7
+        with:
+          name: js-files
+          path: |
+            js/index.js
+            js/index.d.ts
+            js/napi_generated.js
+            js/napi_generated.d.ts
       - name: Upload JS artifact
         uses: actions/upload-artifact@v7
         with:
@@ -97,6 +116,8 @@ jobs:
           path: |
             js/${{ env.APP_NAME }}.*.node
             js/${{ env.APP_NAME }}.*.wasm
+            js/napi_generated.js
+            js/napi_generated.d.ts
           if-no-files-found: error
       - name: Build Python wheels
         uses: PyO3/maturin-action@v1
@@ -147,6 +168,11 @@ jobs:
         with:
           name: python-wheels-${{ matrix.target }}
           path: python/dist
+      - name: Download JS files
+        uses: actions/download-artifact@v8
+        with:
+          name: js-files
+          path: js
       - name: Install Python wheel
         working-directory: python
         run: |
@@ -187,6 +213,11 @@ jobs:
       - name: Move JS artifacts
         working-directory: js
         run: npx --yes --package @napi-rs/cli@3 napi artifacts
+      - name: Download JS files
+        uses: actions/download-artifact@v8
+        with:
+          name: js-files
+          path: js
       - name: List JS packages
         working-directory: js
         run: ls -R ./npm
