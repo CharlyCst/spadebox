@@ -1,4 +1,5 @@
 use std::io::Read;
+use std::path::Path;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -55,7 +56,7 @@ impl Tool for JsExecTool {
             let funcs = sandbox.js.funcs.read().unwrap();
             ctx.register_funcs(&funcs)?;
             drop(funcs);
-            ctx.eval_module(&code)
+            ctx.eval_module(&code, Path::new(&path))
                 .map(|output| output.console.join("\n"))
         })
         .await
@@ -275,5 +276,67 @@ console.log(x);"#,
         )
         .await
         .unwrap();
+    }
+
+    #[tokio::test]
+    async fn import_local_modules() {
+        let (dir, sandbox) = setup();
+
+        // flat import
+        std::fs::write(dir.path().join("utils.js"), "export const double = x => x * 2;").unwrap();
+        std::fs::write(
+            dir.path().join("main.js"),
+            r#"import { double } from "./utils.js";
+console.log(double(21));"#,
+        )
+        .unwrap();
+        let result = JsExecTool::run(&sandbox, JsExecParams { path: "main.js".into() })
+            .await
+            .unwrap();
+        assert_eq!(result, "42");
+
+        // subdirectory import
+        std::fs::create_dir(dir.path().join("lib")).unwrap();
+        std::fs::write(
+            dir.path().join("lib/math.js"),
+            "export const add = (a, b) => a + b;",
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("sub.js"),
+            r#"import { add } from "./lib/math.js";
+console.log(add(1, 2));"#,
+        )
+        .unwrap();
+        let result = JsExecTool::run(&sandbox, JsExecParams { path: "sub.js".into() })
+            .await
+            .unwrap();
+        assert_eq!(result, "3");
+
+        // circular imports — ES live bindings ensure `name` is defined by the time greet() runs
+        std::fs::write(
+            dir.path().join("a.js"),
+            r#"import { greet } from "./b.js";
+export const name = "world";
+greet();"#,
+        )
+        .unwrap();
+        std::fs::write(
+            dir.path().join("b.js"),
+            r#"import { name } from "./a.js";
+export function greet() { console.log("hello " + name); }"#,
+        )
+        .unwrap();
+        let result = JsExecTool::run(&sandbox, JsExecParams { path: "a.js".into() })
+            .await
+            .unwrap();
+        assert_eq!(result, "hello world");
+
+        // path traversal is rejected
+        std::fs::write(dir.path().join("evil.js"), r#"import "../../etc/passwd";"#).unwrap();
+        let err = JsExecTool::run(&sandbox, JsExecParams { path: "evil.js".into() })
+            .await
+            .unwrap_err();
+        assert!(matches!(err, ToolError::JsError(_)));
     }
 }

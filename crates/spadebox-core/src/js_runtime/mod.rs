@@ -32,6 +32,7 @@ pub(crate) struct JsOutput {
 pub struct JsContext {
     ctx: Context,
     console_output: Rc<RefCell<Vec<String>>>,
+    loader: Rc<loader::SpadeboxModuleLoader>,
     #[allow(dead_code)]
     sandbox: Arc<Sandbox>,
 }
@@ -40,22 +41,22 @@ impl JsContext {
     /// Creates a new `JsContext` with all runtime APIs registered.
     pub fn new(sandbox: impl AsArc<Sandbox>) -> Self {
         let sandbox = sandbox.as_arc();
+        let loader = Rc::new(loader::SpadeboxModuleLoader::new(&sandbox));
         let mut ctx = Context::builder()
-            .module_loader(Rc::new(loader::SpadeboxModuleLoader {
-                sandbox: Arc::clone(&sandbox),
-            }))
+            .module_loader(Rc::clone(&loader))
             .build()
             .expect("failed to build JS context");
 
         // Inject runtime functions and objects
         files::register(&mut ctx, Arc::clone(&sandbox));
         fetch::register(&mut ctx, Arc::clone(&sandbox));
-        loader::register_require(&mut ctx, Arc::clone(&sandbox));
+        loader::register_require(&mut ctx, Rc::clone(&loader));
         let console_output = console::register(&mut ctx);
 
         Self {
             ctx,
             console_output,
+            loader,
             sandbox,
         }
     }
@@ -117,9 +118,20 @@ impl JsContext {
     /// loaded and evaluated before returning; the job queue is drained so that
     /// all async work settles. There is no "last expression" value — only
     /// console output is captured.
-    pub fn eval_module(&mut self, code: &str) -> ToolResult<JsOutput> {
-        let module = Module::parse(Source::from_bytes(code.as_bytes()), None, &mut self.ctx)
-            .map_err(|e| ToolError::JsError(e.to_string()))?;
+    ///
+    /// `path` sets the module's own location so that relative imports inside
+    /// the script (e.g. `import './utils.js'`) resolve correctly.
+    pub fn eval_module(&mut self, code: &str, path: &std::path::Path) -> ToolResult<JsOutput> {
+        let module = Module::parse(
+            Source::from_bytes(code.as_bytes()).with_path(path),
+            None,
+            &mut self.ctx,
+        )
+        .map_err(|e| ToolError::JsError(e.to_string()))?;
+
+        // Seed the loader cache so that circular imports back to the entry module
+        // return this instance rather than loading a second fresh copy.
+        self.loader.insert_in_cache(path, module.clone());
 
         let promise = module.load_link_evaluate(&mut self.ctx);
         let job_result = self.ctx.run_jobs();
