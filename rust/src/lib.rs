@@ -133,6 +133,38 @@ impl SpadeBox {
         self
     }
 
+    /// Register a credential and return an opaque token.
+    ///
+    /// The token is deterministic: the same `name` always produces the same token
+    /// across process restarts. Security relies on the `domains` allowlist — the
+    /// credential is substituted only when the fetch target matches one of the
+    /// supplied domain patterns (same syntax as [`allow`](Self::allow)).
+    ///
+    /// Pass the returned token as a header value (e.g. `Bearer <token>`);
+    /// SpadeBox substitutes the real credential at fetch time for matching hosts.
+    ///
+    /// # Example
+    ///
+    /// ```no_run
+    /// # #[tokio::main]
+    /// # async fn main() -> Result<(), spadebox::Error> {
+    /// use spadebox::SpadeBox;
+    ///
+    /// let sb = SpadeBox::new().enable_http().allow("api.github.com", &["GET"])?;
+    /// let token = sb.add_credential("github-token", "secret", ["api.github.com"]);
+    /// // token is something like "SPADB-a3f7..."
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn add_credential(
+        &self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+        domains: impl IntoIterator<Item = impl Into<String>>,
+    ) -> String {
+        self.inner.add_credential(name, value, domains)
+    }
+
     /// Add a domain rule permitting the given HTTP verbs for `pattern`.
     ///
     /// `pattern` may be an exact hostname (`"api.example.com"`), a wildcard
