@@ -9,6 +9,7 @@ use boa_engine::{
 };
 use reqwest::Client;
 
+use crate::sandbox::substitute_credentials;
 use crate::tools::fetch::validate_request;
 use crate::{Sandbox, ToolError};
 
@@ -64,13 +65,15 @@ fn fetch_fn(
     // --- Security check (synchronous, before enqueuing any async work) ---
     let sandbox = Arc::clone(&captures.sandbox);
 
-    let (url, user_agent) =
+    let (validated_url, user_agent) =
         validate_request(&sandbox, &url_str, &method_str).map_err(|e| match e {
             ToolError::PermissionDenied(msg) | ToolError::InvalidUrl(msg) => {
                 JsNativeError::error().with_message(format!("fetch: {msg}"))
             }
             e => JsNativeError::error().with_message(format!("fetch: {e}")),
         })?;
+
+    let (url, body) = substitute_credentials(&sandbox, validated_url, body);
 
     // --- Create pending promise, enqueue HTTP job ---
     let (promise, resolvers) = JsPromise::new_pending(ctx);

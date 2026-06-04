@@ -2,6 +2,7 @@ use std::collections::HashMap;
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
+use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::tool_utils::Registry;
 use crate::{AsArc, ToolError, ToolResult};
@@ -59,6 +60,19 @@ impl HttpVerb {
     }
 }
 
+/// Returns `true` if `pattern` matches `host`.
+///
+/// Patterns follow the same rules as [`DomainRule`]:
+/// - Exact hostname: `"api.example.com"`
+/// - Subdomain wildcard: `"*.example.com"`
+/// - Catch-all: `"*"`
+fn domain_pattern_matches(pattern: &str, host: &str) -> bool {
+    match pattern.strip_prefix('*') {
+        Some(suffix) => host.ends_with(suffix),
+        None => host == pattern,
+    }
+}
+
 /// A domain rule that maps a pattern to a set of allowed HTTP verbs.
 ///
 /// Patterns may be:
@@ -107,12 +121,89 @@ impl DomainRule {
 
     /// Returns `true` if this rule matches `host`.
     pub(crate) fn matches(&self, host: &str) -> bool {
-        match self.pattern.strip_prefix('*') {
-            Some(suffix) => host.ends_with(suffix),
-            None => host == self.pattern,
+        domain_pattern_matches(&self.pattern, host)
+    }
+}
+
+// ---------------------------------------------------------------------------
+// Credentials
+// ---------------------------------------------------------------------------
+
+/// A credential that can be injected into fetch requests.
+///
+/// Agents hold an opaque token returned by [`Sandbox::add_credential`]. At
+/// fetch time, any occurrence of the token in the URL or body is replaced with
+/// the real value, provided the target host matches one of `domains`.
+pub struct Credential {
+    /// Human-readable label; not part of the token.
+    pub name: String,
+    /// The real secret value substituted at fetch time.
+    pub value: String,
+    /// Domain patterns that allow substitution (same syntax as [`DomainRule`]).
+    pub domains: Vec<String>,
+}
+
+impl Credential {
+    fn matches_host(&self, host: &str) -> bool {
+        self.domains
+            .iter()
+            .any(|pattern| domain_pattern_matches(pattern, host))
+    }
+}
+
+/// Returns `true` if `text` contains a credential token that is allowed for `host`.
+fn has_credential(text: &str, host: &str, http: &HttpConfig) -> bool {
+    if http.credentials.is_empty() || !text.contains("SPADB-") {
+        return false;
+    }
+    http.credentials
+        .iter()
+        .any(|(token, cred)| cred.matches_host(host) && text.contains(token.as_str()))
+}
+
+/// Replaces credential tokens in `text` in-place for all credentials allowed for `host`.
+fn replace_credentials(text: &mut String, host: &str, http: &HttpConfig) {
+    for (token, cred) in &http.credentials {
+        if text.contains(token.as_str()) && cred.matches_host(host) {
+            *text = text.replace(token.as_str(), &cred.value);
         }
     }
 }
+
+/// Substitutes credentials in a validated URL and optional body.
+///
+/// Acquires and releases the [`HttpConfig`] lock internally, so callers must
+/// not hold it already. Returns the updated URL and body ready for the request.
+/// When no credentials match, both are returned as-is with no copies made.
+pub(crate) fn substitute_credentials(
+    sandbox: &Sandbox,
+    url: reqwest::Url,
+    body: Option<String>,
+) -> (reqwest::Url, Option<String>) {
+    let http = sandbox.http.read().unwrap();
+    let host = url.host_str().unwrap_or("").to_owned();
+
+    let url = if has_credential(url.as_str(), &host, &http) {
+        let mut s = url.to_string();
+        replace_credentials(&mut s, &host, &http);
+        reqwest::Url::parse(&s).unwrap_or(url)
+    } else {
+        url
+    };
+
+    let body = body.map(|mut b| {
+        if has_credential(&b, &host, &http) {
+            replace_credentials(&mut b, &host, &http);
+        }
+        b
+    });
+
+    (url, body)
+}
+
+// ---------------------------------------------------------------------------
+// HTTP configuration
+// ---------------------------------------------------------------------------
 
 /// Configuration for the `fetch` tool.
 ///
@@ -136,6 +227,8 @@ pub struct HttpConfig {
     pub domain_rules: Vec<DomainRule>,
     /// Value sent as the `User-Agent` header on every request.
     pub user_agent: String,
+    /// Registered credentials keyed by their opaque token.
+    pub credentials: HashMap<String, Credential>,
 }
 
 impl Default for HttpConfig {
@@ -144,6 +237,7 @@ impl Default for HttpConfig {
             enabled: false,
             domain_rules: Vec::new(),
             user_agent: "spadebox/0.0.0 (AI-agent)".to_string(),
+            credentials: HashMap::new(),
         }
     }
 }
@@ -433,6 +527,48 @@ impl Sandbox {
         self
     }
 
+    /// Registers a credential and returns a stable opaque token the agent can use as a placeholder.
+    ///
+    /// The token is deterministic: the same `name` always produces the same token across process
+    /// restarts. Security relies on the `domains` allowlist — the token is substituted only when
+    /// the fetch target matches one of the supplied domain patterns (same syntax as [`DomainRule`]).
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// use spadebox_core::Sandbox;
+    ///
+    /// let sandbox = Sandbox::new();
+    /// let token = sandbox.add_credential("github-token", "secret", ["api.github.com"]);
+    /// // token is something like "SPADB-a3f7..."
+    /// // The agent can now pass `token` as a Bearer value; it will be substituted at fetch time.
+    /// ```
+    pub fn add_credential(
+        &self,
+        name: impl Into<String>,
+        value: impl Into<String>,
+        domains: impl IntoIterator<Item = impl Into<String>>,
+    ) -> String {
+        let name = name.into();
+        let value = value.into();
+        let domains: Vec<String> = domains.into_iter().map(Into::into).collect();
+
+        let mut hasher = DefaultHasher::new();
+        "spadebox".hash(&mut hasher);
+        name.hash(&mut hasher);
+        let token = format!("SPADB-{:016x}", hasher.finish());
+
+        self.http.write().unwrap().credentials.insert(
+            token.clone(),
+            Credential {
+                name,
+                value,
+                domains,
+            },
+        );
+        token
+    }
+
     /// Appends a domain rule.
     pub fn allow(&self, rule: DomainRule) -> &Self {
         let mut http_config = self.http.write().unwrap();
@@ -559,5 +695,46 @@ mod tests {
         assert_eq!(HttpVerb::parse("DELETE"), Some(HttpVerb::Delete));
         assert_eq!(HttpVerb::parse("HEAD"), Some(HttpVerb::Head));
         assert_eq!(HttpVerb::parse("UNKNOWN"), None);
+    }
+
+    #[test]
+    fn credential_tokens() {
+        let sandbox = Sandbox::new();
+
+        // Same name → same token regardless of value or domains.
+        let t1 = sandbox.add_credential("my-key", "secret1", ["api.example.com"]);
+        let t2 = sandbox.add_credential("my-key", "secret2", ["other.com"]);
+        assert_eq!(t1, t2);
+        assert!(t1.starts_with("SPADB-"));
+
+        let token = sandbox.add_credential("api-key", "real-secret", ["api.example.com"]);
+        let http = sandbox.http.read().unwrap();
+
+        // Substitutes when host is in the allowlist.
+        assert!(has_credential(&token, "api.example.com", &http));
+        let mut s = token.clone();
+        replace_credentials(&mut s, "api.example.com", &http);
+        assert_eq!(s, "real-secret");
+
+        // No substitution for unlisted domains.
+        assert!(!has_credential(&token, "evil.com", &http));
+
+        // Wildcard domain patterns.
+        drop(http);
+        let token = sandbox.add_credential("wildcard-key", "secret", ["*.example.com"]);
+        let http = sandbox.http.read().unwrap();
+        assert!(has_credential(&token, "api.example.com", &http));
+        assert!(has_credential(&token, "cdn.example.com", &http));
+        assert!(!has_credential(&token, "evil.com", &http));
+
+        // Token embedded in a larger string.
+        let mut body = format!("{{\"Authorization\": \"Bearer {token}\"}}");
+        assert!(has_credential(&body, "api.example.com", &http));
+        replace_credentials(&mut body, "api.example.com", &http);
+        assert_eq!(body, r#"{"Authorization": "Bearer secret"}"#);
+
+        // No token present → no match.
+        let text = "https://api.example.com/data?foo=bar";
+        assert!(!has_credential(text, "api.example.com", &http));
     }
 }

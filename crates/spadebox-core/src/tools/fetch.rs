@@ -15,7 +15,7 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::tool_utils::{DEFAULT_MAX_BYTES, deserialize_bool_flexible, truncate_bytes};
-use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::HttpVerb};
+use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::{HttpVerb, substitute_credentials}};
 
 use super::Tool;
 
@@ -55,8 +55,10 @@ impl Tool for FetchTool {
 
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: FetchParams) -> ToolResult<String> {
         let sandbox = sandbox.as_arc();
-        let (url, user_agent) = validate_request(&sandbox, &params.url, &params.method)?;
+        let (validated_url, user_agent) = validate_request(&sandbox, &params.url, &params.method)?;
         let method_upper = params.method.to_uppercase();
+
+        let (url, body) = substitute_credentials(&sandbox, validated_url, params.body);
 
         // Build and send the request.
         let client = Client::builder()
@@ -67,7 +69,7 @@ impl Tool for FetchTool {
             .map_err(|e| ToolError::InvalidUrl(format!("invalid method: {}", e)))?;
 
         let mut req = client.request(method, url);
-        if let Some(body) = params.body {
+        if let Some(body) = body {
             req = req.body(body);
         }
 
