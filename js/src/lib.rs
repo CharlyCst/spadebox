@@ -331,13 +331,13 @@ impl SpadeBox {
   ///   .exposeJsFunc("fetchName", ["id"], async ({id}) => getName(id));
   /// ```
   #[napi(
-    ts_args_type = "name: string, params: string[], func: (args: Record<string, unknown>) => unknown | Promise<unknown>"
+    ts_args_type = "name: string, params: string[], func: (args: Record<string, unknown>) => unknown | void | Promise<unknown | void>"
   )]
   pub fn expose_js_func<'env>(
     &self,
     name: String,
     params: Vec<String>,
-    func: Function<'_, serde_json::Value, Promise<serde_json::Value>>,
+    func: Function<'_, serde_json::Value, Promise<Option<serde_json::Value>>>,
     this: This<'env>,
   ) -> napi::Result<This<'env>> {
     let tsfn = func
@@ -353,7 +353,7 @@ impl SpadeBox {
       tsfn.call_with_return_value(
         args,
         ThreadsafeFunctionCallMode::Blocking,
-        move |result: napi::Result<Promise<serde_json::Value>>, _env: Env| {
+        move |result: napi::Result<Promise<Option<serde_json::Value>>>, _env: Env| {
           match result {
             Err(e) => {
               let _ = tx.send(Err(e.to_string()));
@@ -367,7 +367,12 @@ impl SpadeBox {
                 let rt = tokio::runtime::Builder::new_current_thread()
                   .build()
                   .expect("tokio runtime for Promise resolution");
-                let _ = tx.send(rt.block_on(promise).map_err(|e| e.to_string()));
+                // undefined/null resolve to None; treat both as JSON null.
+                let _ = tx.send(
+                  rt.block_on(promise)
+                    .map_err(|e| e.to_string())
+                    .map(|opt| opt.unwrap_or(serde_json::Value::Null)),
+                );
               });
             }
           }

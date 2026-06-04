@@ -172,6 +172,20 @@ Deno.test('exposeJsFunc async function with object return', async () => {
   assertEquals(result, '5')
 })
 
+Deno.test('exposeJsFunc void function (no return value) does not throw', async () => {
+  const sb = new SpadeBox().enableJs()
+  sb.exposeJsFunc('noop', [], () => { /* returns nothing — undefined */ })
+  const result = await sb.jsRepl('noop()')
+  assertEquals(result, 'null')
+})
+
+Deno.test('exposeJsFunc async void function (no return value) does not throw', async () => {
+  const sb = new SpadeBox().enableJs()
+  sb.exposeJsFunc('asyncNoop', [], async () => { /* returns nothing — undefined */ })
+  const result = await sb.jsRepl('asyncNoop()')
+  assertEquals(result, 'null')
+})
+
 // --- callTool ---
 
 Deno.test('callTool dispatches read_file and returns output', async () => {
