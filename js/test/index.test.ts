@@ -174,14 +174,14 @@ Deno.test('exposeJsFunc async function with object return', async () => {
 
 Deno.test('exposeJsFunc void function (no return value) does not throw', async () => {
   const sb = new SpadeBox().enableJs()
-  sb.exposeJsFunc('noop', [], () => { /* returns nothing — undefined */ })
+  sb.exposeJsFunc('noop', [], () => {/* returns nothing — undefined */})
   const result = await sb.jsRepl('noop()')
   assertEquals(result, 'null')
 })
 
 Deno.test('exposeJsFunc async void function (no return value) does not throw', async () => {
   const sb = new SpadeBox().enableJs()
-  sb.exposeJsFunc('asyncNoop', [], async () => { /* returns nothing — undefined */ })
+  sb.exposeJsFunc('asyncNoop', [], async () => {/* returns nothing — undefined */})
   const result = await sb.jsRepl('asyncNoop()')
   assertEquals(result, 'null')
 })

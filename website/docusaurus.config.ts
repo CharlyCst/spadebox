@@ -79,7 +79,7 @@ const config: Config = {
         {
           title: 'More',
           items: [
-{
+            {
               label: 'GitHub',
               href: 'https://github.com/CharlyCst/spadebox',
             },

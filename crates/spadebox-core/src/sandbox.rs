@@ -1,8 +1,8 @@
 use std::collections::HashMap;
+use std::hash::{DefaultHasher, Hash, Hasher};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, RwLock};
-use std::hash::{DefaultHasher, Hash, Hasher};
 
 use crate::tool_utils::Registry;
 use crate::{AsArc, ToolError, ToolResult};

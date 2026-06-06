@@ -27,18 +27,28 @@ console.log('existsSync:', fs.existsSync('hello.txt'), fs.existsSync('nope.txt')
 // readdirSync
 fs.writeFileSync('a.txt', '')
 fs.writeFileSync('b.txt', '')
-const entries = fs.readdirSync('.').filter(f => f === 'a.txt' || f === 'b.txt').sort()
+const entries = fs.readdirSync('.').filter((f) => f === 'a.txt' || f === 'b.txt').sort()
 console.log('readdirSync:', entries.join(','))
 
 // mkdirSync
 fs.mkdirSync('mydir')
 fs.mkdirSync('nested/a/b', { recursive: true })
-console.log(`mkdirSync: ${fs.existsSync('mydir') ? 'dir exists' : 'missing'}, ${fs.existsSync('nested/a/b') ? 'nested exists' : 'missing'}`)
+console.log(
+  `mkdirSync: ${fs.existsSync('mydir') ? 'dir exists' : 'missing'}, ${
+    fs.existsSync('nested/a/b') ? 'nested exists' : 'missing'
+  }`,
+)
 
 // statSync
 fs.writeFileSync('stat.txt', 'hello')
 const fstat = fs.statSync('stat.txt')
-console.log('statSync file:', `size=${fstat.size}`, `isFile=${fstat.isFile()}`, `isDir=${fstat.isDirectory()}`, `mtimeMs>0=${fstat.mtimeMs > 0}`)
+console.log(
+  'statSync file:',
+  `size=${fstat.size}`,
+  `isFile=${fstat.isFile()}`,
+  `isDir=${fstat.isDirectory()}`,
+  `mtimeMs>0=${fstat.mtimeMs > 0}`,
+)
 const dstat = fs.statSync('mydir')
 console.log('statSync dir:', `isFile=${dstat.isFile()}`, `isDir=${dstat.isDirectory()}`)
 

@@ -283,16 +283,25 @@ console.log(x);"#,
         let (dir, sandbox) = setup();
 
         // flat import
-        std::fs::write(dir.path().join("utils.js"), "export const double = x => x * 2;").unwrap();
+        std::fs::write(
+            dir.path().join("utils.js"),
+            "export const double = x => x * 2;",
+        )
+        .unwrap();
         std::fs::write(
             dir.path().join("main.js"),
             r#"import { double } from "./utils.js";
 console.log(double(21));"#,
         )
         .unwrap();
-        let result = JsExecTool::run(&sandbox, JsExecParams { path: "main.js".into() })
-            .await
-            .unwrap();
+        let result = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "main.js".into(),
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(result, "42");
 
         // subdirectory import
@@ -308,9 +317,14 @@ console.log(double(21));"#,
 console.log(add(1, 2));"#,
         )
         .unwrap();
-        let result = JsExecTool::run(&sandbox, JsExecParams { path: "sub.js".into() })
-            .await
-            .unwrap();
+        let result = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "sub.js".into(),
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(result, "3");
 
         // circular imports — ES live bindings ensure `name` is defined by the time greet() runs
@@ -327,16 +341,26 @@ greet();"#,
 export function greet() { console.log("hello " + name); }"#,
         )
         .unwrap();
-        let result = JsExecTool::run(&sandbox, JsExecParams { path: "a.js".into() })
-            .await
-            .unwrap();
+        let result = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "a.js".into(),
+            },
+        )
+        .await
+        .unwrap();
         assert_eq!(result, "hello world");
 
         // path traversal is rejected
         std::fs::write(dir.path().join("evil.js"), r#"import "../../etc/passwd";"#).unwrap();
-        let err = JsExecTool::run(&sandbox, JsExecParams { path: "evil.js".into() })
-            .await
-            .unwrap_err();
+        let err = JsExecTool::run(
+            &sandbox,
+            JsExecParams {
+                path: "evil.js".into(),
+            },
+        )
+        .await
+        .unwrap_err();
         assert!(matches!(err, ToolError::JsError(_)));
     }
 }

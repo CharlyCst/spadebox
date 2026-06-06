@@ -442,7 +442,10 @@ fn rm_sync(
     ctx: &mut Context,
 ) -> JsResult<JsValue> {
     let path = string_arg(args, 0, "path")?;
-    let opts = args.get(1).filter(|v| !v.is_undefined()).and_then(|v| v.as_object());
+    let opts = args
+        .get(1)
+        .filter(|v| !v.is_undefined())
+        .and_then(|v| v.as_object());
 
     let recursive = opts
         .as_ref()
@@ -629,9 +632,15 @@ mod tests {
     fn rename_sync() {
         let (mut ctx, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("old.txt", "content")"#);
-        assert_eq!(eval(&mut ctx, r#"fs.renameSync("old.txt", "new.txt")"#), "undefined");
+        assert_eq!(
+            eval(&mut ctx, r#"fs.renameSync("old.txt", "new.txt")"#),
+            "undefined"
+        );
         assert_eq!(eval(&mut ctx, r#"fs.existsSync("old.txt")"#), "false");
-        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("new.txt")"#), r#""content""#);
+        assert_eq!(
+            eval(&mut ctx, r#"fs.readFileSync("new.txt")"#),
+            r#""content""#
+        );
         assert!(eval_err(&mut ctx, r#"fs.renameSync("nope.txt", "x.txt")"#).contains("JS error"));
     }
 
@@ -639,10 +648,21 @@ mod tests {
     fn copy_file_sync() {
         let (mut ctx, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("src.txt", "hello")"#);
-        assert_eq!(eval(&mut ctx, r#"fs.copyFileSync("src.txt", "dst.txt")"#), "undefined");
-        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("src.txt")"#), r#""hello""#);
-        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("dst.txt")"#), r#""hello""#);
-        assert!(eval_err(&mut ctx, r#"fs.copyFileSync("nope.txt", "dst.txt")"#).contains("JS error"));
+        assert_eq!(
+            eval(&mut ctx, r#"fs.copyFileSync("src.txt", "dst.txt")"#),
+            "undefined"
+        );
+        assert_eq!(
+            eval(&mut ctx, r#"fs.readFileSync("src.txt")"#),
+            r#""hello""#
+        );
+        assert_eq!(
+            eval(&mut ctx, r#"fs.readFileSync("dst.txt")"#),
+            r#""hello""#
+        );
+        assert!(
+            eval_err(&mut ctx, r#"fs.copyFileSync("nope.txt", "dst.txt")"#).contains("JS error")
+        );
     }
 
     #[test]
@@ -658,7 +678,10 @@ mod tests {
         eval(&mut ctx, r#"fs.rmSync("sub", { recursive: true })"#);
         assert_eq!(eval(&mut ctx, r#"fs.existsSync("sub")"#), "false");
         // force: true silences missing-path errors
-        assert_eq!(eval(&mut ctx, r#"fs.rmSync("nope.txt", { force: true })"#), "undefined");
+        assert_eq!(
+            eval(&mut ctx, r#"fs.rmSync("nope.txt", { force: true })"#),
+            "undefined"
+        );
         // without force, missing path is an error
         assert!(eval_err(&mut ctx, r#"fs.rmSync("nope.txt")"#).contains("JS error"));
     }

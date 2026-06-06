@@ -17,7 +17,10 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::tool_utils::{DEFAULT_MAX_BYTES, deserialize_bool_flexible, truncate_bytes};
-use crate::{AsArc, Sandbox, ToolError, ToolResult, sandbox::{HttpVerb, substitute_credentials}};
+use crate::{
+    AsArc, Sandbox, ToolError, ToolResult,
+    sandbox::{HttpVerb, substitute_credentials},
+};
 
 use super::Tool;
 
