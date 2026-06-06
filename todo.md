@@ -22,6 +22,7 @@
       https://platform.claude.com/docs/en/agents-and-tools/tool-use/web-fetch-tool for claude's recommend limits)? Set
       to 0 to disable limit?
 - [ ] Make "GET" the default method, and make method optional.
+- [ ] Security: if the HTTP response contains the input secret we should substitute it back to the token before the agent sees it.
 
 ## Grep
 

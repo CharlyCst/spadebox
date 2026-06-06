@@ -34,7 +34,7 @@ Focus on your domain-specific tools and harness — give your agent SpadeBox for
 
 ## Features
 
-- **Lightweight sandboxing:** SpadeBox uses the [`cap-std` crate](https://github.com/bytecodealliance/cap-std) for file system sandboxing, and domain whitelisting for HTTP requests.
+- **Lightweight sandboxing:** SpadeBox uses the [`cap-std` crate](https://github.com/bytecodealliance/cap-std) for file system sandboxing, and domain allowlisting for HTTP requests.
   The JS engine is based on [boa](https://boajs.dev/), and uses the same sandboxing policies.
 - **Configurable:** Pick only the tools you need for your application: files, network, or code execution, or any combination of those.
 - **No `bash` tool:** SpadeBox has been designed to work well even _without_ a `bash` tool.
