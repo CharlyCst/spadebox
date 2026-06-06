@@ -15,6 +15,7 @@ use spadebox_core::{
     MoveParams, MoveTool, ReadFileTool, ReadParams, Tool, WriteFileTool, WriteParams,
   },
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 
 fn to_napi_err(e: spadebox_core::ToolError) -> napi::Error {
@@ -285,6 +286,7 @@ impl SpadeBox {
   /// HTTP must be enabled first via `enableHttp`. The `url` must use the `http`
   /// or `https` scheme. `method` is case-insensitive (e.g. `"GET"`, `"POST"`).
   /// Pass `body` for methods that send a request body (POST, PUT, PATCH).
+  /// Pass `headers` as a map of header names to values.
   /// When `raw` is `false` (default), HTML responses are converted to Markdown.
   /// Set `raw` to `true` to receive the raw response body unchanged.
   /// `maxBytes` caps the number of bytes returned (default: 20 000). Pass `0` to disable.
@@ -294,6 +296,7 @@ impl SpadeBox {
     url: String,
     method: String,
     body: Option<String>,
+    headers: Option<HashMap<String, String>>,
     raw: Option<bool>,
     max_bytes: Option<u32>,
   ) -> napi::Result<String> {
@@ -303,6 +306,7 @@ impl SpadeBox {
         url,
         method,
         body,
+        headers,
         raw: raw.unwrap_or(false),
         max_bytes: max_bytes.map(Into::into),
       },

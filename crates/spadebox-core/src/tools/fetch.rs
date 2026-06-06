@@ -10,6 +10,8 @@
 //!   rule are rejected.
 //! - URL scheme must be `http` or `https`; all other schemes are rejected.
 
+use std::collections::HashMap;
+
 use reqwest::Client;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -31,6 +33,8 @@ pub struct FetchParams {
     pub method: String,
     /// Optional request body (for POST, PUT, PATCH).
     pub body: Option<String>,
+    /// Optional HTTP headers to include in the request (e.g. `{"Authorization": "Bearer token"}`).
+    pub headers: Option<HashMap<String, String>>,
     /// When `true` return the raw response body, otherwise process the content for efficient LLM
     /// consumption (e.g. convert HTML to markdown). Default to `false`
     #[serde(default, deserialize_with = "deserialize_bool_flexible")]
@@ -58,7 +62,12 @@ impl Tool for FetchTool {
         let (validated_url, user_agent) = validate_request(&sandbox, &params.url, &params.method)?;
         let method_upper = params.method.to_uppercase();
 
-        let (url, body) = substitute_credentials(&sandbox, validated_url, params.body);
+        let (url, body, headers) = substitute_credentials(
+            &sandbox,
+            validated_url,
+            params.body,
+            params.headers.unwrap_or_default(),
+        );
 
         // Build and send the request.
         let client = Client::builder()
@@ -71,6 +80,9 @@ impl Tool for FetchTool {
         let mut req = client.request(method, url);
         if let Some(body) = body {
             req = req.body(body);
+        }
+        for (key, value) in headers {
+            req = req.header(&key, &value);
         }
 
         let response = req
@@ -211,6 +223,7 @@ mod tests {
                 url: "https://example.com".into(),
                 method: "GET".into(),
                 body: None,
+                headers: None,
                 raw: false,
                 max_bytes: None,
             },
@@ -231,6 +244,7 @@ mod tests {
                 url: "file:///etc/passwd".into(),
                 method: "GET".into(),
                 body: None,
+                headers: None,
                 raw: false,
                 max_bytes: None,
             },
@@ -251,6 +265,7 @@ mod tests {
                 url: "https://evil.com".into(),
                 method: "GET".into(),
                 body: None,
+                headers: None,
                 raw: false,
                 max_bytes: None,
             },
@@ -271,6 +286,7 @@ mod tests {
                 url: "https://example.com".into(),
                 method: "POST".into(),
                 body: None,
+                headers: None,
                 raw: false,
                 max_bytes: None,
             },

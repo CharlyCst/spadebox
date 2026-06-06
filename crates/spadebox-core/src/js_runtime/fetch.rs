@@ -1,3 +1,4 @@
+use std::collections::HashMap;
 use std::sync::Arc;
 
 use boa_engine::{
@@ -5,7 +6,7 @@ use boa_engine::{
     job::{Job, PromiseJob},
     js_string,
     object::{ObjectInitializer, builtins::JsPromise},
-    property::Attribute,
+    property::{Attribute, PropertyKey},
 };
 use reqwest::Client;
 
@@ -40,9 +41,10 @@ fn fetch_fn(
         })?
         .to_std_string_lossy();
 
-    // --- Parse options (method, body) ---
+    // --- Parse options (method, body, headers) ---
     let method_str;
     let body: Option<String>;
+    let headers: HashMap<String, String>;
     if let Some(opts) = args.get(1).and_then(|v| v.as_object()) {
         method_str = opts
             .get(js_string!("method"), ctx)
@@ -57,9 +59,32 @@ fn fetch_fn(
             .filter(|v| !v.is_undefined() && !v.is_null())
             .and_then(|v| v.as_string())
             .map(|s| s.to_std_string_lossy());
+        headers = opts
+            .get(js_string!("headers"), ctx)
+            .ok()
+            .filter(|v| !v.is_undefined() && !v.is_null())
+            .and_then(|v| v.as_object())
+            .map(|obj| {
+                let mut map = HashMap::new();
+                if let Ok(keys) = obj.own_property_keys(ctx) {
+                    for key in keys {
+                        if let PropertyKey::String(k) = key {
+                            let k_str = k.to_std_string_lossy();
+                            if let Ok(val) = obj.get(js_string!(k_str.as_str()), ctx)
+                                && let Some(v) = val.as_string()
+                            {
+                                map.insert(k_str, v.to_std_string_lossy());
+                            }
+                        }
+                    }
+                }
+                map
+            })
+            .unwrap_or_default();
     } else {
         method_str = "GET".to_owned();
         body = None;
+        headers = HashMap::new();
     }
 
     // --- Security check (synchronous, before enqueuing any async work) ---
@@ -73,7 +98,7 @@ fn fetch_fn(
             e => JsNativeError::error().with_message(format!("fetch: {e}")),
         })?;
 
-    let (url, body) = substitute_credentials(&sandbox, validated_url, body);
+    let (url, body, headers) = substitute_credentials(&sandbox, validated_url, body, headers);
 
     // --- Create pending promise, enqueue HTTP job ---
     let (promise, resolvers) = JsPromise::new_pending(ctx);
@@ -81,7 +106,7 @@ fn fetch_fn(
     let reject = resolvers.reject;
 
     ctx.enqueue_job(Job::PromiseJob(PromiseJob::new(move |ctx| {
-        match do_request(url, &method_str, body.as_deref(), &user_agent) {
+        match do_request(url, &method_str, body.as_deref(), &user_agent, &headers) {
             Ok((status, body_text)) => {
                 let response = build_response(status, body_text, ctx);
                 resolve.call(&JsValue::undefined(), &[JsValue::from(response)], ctx)?;
@@ -108,10 +133,12 @@ fn do_request(
     method: &str,
     body: Option<&str>,
     user_agent: &str,
+    headers: &HashMap<String, String>,
 ) -> Result<(u16, String), String> {
     let method = method.to_owned();
     let body = body.map(str::to_owned);
     let user_agent = user_agent.to_owned();
+    let headers = headers.clone();
 
     let fut = async move {
         let client = Client::builder()
@@ -123,6 +150,9 @@ fn do_request(
         let mut req = client.request(method_parsed, url);
         if let Some(b) = body {
             req = req.body(b);
+        }
+        for (key, value) in &headers {
+            req = req.header(key.as_str(), value.as_str());
         }
         let resp = req.send().await.map_err(|e| e.to_string())?;
         let status = resp.status().as_u16();

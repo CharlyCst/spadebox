@@ -13,6 +13,7 @@ use spadebox_core::{
         WriteParams,
     },
 };
+use std::collections::HashMap;
 use std::sync::Arc;
 use tokio::runtime::Runtime;
 
@@ -438,17 +439,20 @@ impl SpadeBox {
     /// ``http`` or ``https`` scheme. `method` is case-insensitive (e.g.
     /// ``"GET"``, ``"POST"``).
     /// Pass `body` for methods that send a request body (POST, PUT, PATCH).
+    /// Pass `headers` as a dict of header names to values.
     /// When `raw` is `False` (default), HTML responses are converted to
     /// Markdown. Set `raw` to `True` to receive the raw response body.
     /// `max_bytes` caps the number of bytes returned (default: 20 000).
     /// Pass ``0`` to disable.
-    #[pyo3(signature = (url, method, body=None, raw=None, max_bytes=None))]
+    #[allow(clippy::too_many_arguments)]
+    #[pyo3(signature = (url, method, body=None, headers=None, raw=None, max_bytes=None))]
     pub fn fetch(
         &self,
         py: Python<'_>,
         url: String,
         method: String,
         body: Option<String>,
+        headers: Option<HashMap<String, String>>,
         raw: Option<bool>,
         max_bytes: Option<u64>,
     ) -> PyResult<String> {
@@ -462,6 +466,7 @@ impl SpadeBox {
                         url,
                         method,
                         body,
+                        headers,
                         raw: raw.unwrap_or(false),
                         max_bytes,
                     },

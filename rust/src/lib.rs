@@ -372,17 +372,17 @@ impl SpadeBox {
 
     /// Perform an HTTP request and return the response body as text.
     ///
-    /// HTTP must be enabled first via [`enable_http`](Self::enable_http). The
-    /// `url` must use the `http` or `https` scheme. `method` is
-    /// case-insensitive (e.g. `"GET"`, `"POST"`). Pass `body` for methods that
-    /// send a request body (POST, PUT, PATCH). When `raw` is `false` (default),
-    /// HTML responses are converted to Markdown. `max_bytes` caps the number of
-    /// bytes returned (default: 20 000). Pass `Some(0)` to disable.
+    /// HTTP must be enabled first via [`enable_http`](Self::enable_http). The `url` must use the
+    /// `http` or `https` scheme. `method` is case-insensitive (e.g. `"GET"`, `"POST"`). Pass `body`
+    /// for methods that send a request body (POST, PUT, PATCH). Pass `headers` as a map of header
+    /// names to values. When `raw` is `false` (default), HTML responses are converted to Markdown.
+    /// `max_bytes` caps the number of bytes returned (default: 20 000). Pass `Some(0)` to disable.
     pub async fn fetch(
         &self,
         url: &str,
         method: &str,
         body: Option<&str>,
+        headers: Option<std::collections::HashMap<String, String>>,
         raw: bool,
         max_bytes: Option<u64>,
     ) -> Result<String, ToolError> {
@@ -392,6 +392,7 @@ impl SpadeBox {
                 url: url.to_owned(),
                 method: method.to_owned(),
                 body: body.map(str::to_owned),
+                headers,
                 raw,
                 max_bytes,
             },

@@ -170,16 +170,17 @@ fn replace_credentials(text: &mut String, host: &str, http: &HttpConfig) {
     }
 }
 
-/// Substitutes credentials in a validated URL and optional body.
+/// Substitutes credentials in a validated URL, optional body, and headers.
 ///
 /// Acquires and releases the [`HttpConfig`] lock internally, so callers must
-/// not hold it already. Returns the updated URL and body ready for the request.
-/// When no credentials match, both are returned as-is with no copies made.
+/// not hold it already. Returns the updated URL, body, and headers ready for
+/// the request. When no credentials match, all are returned as-is.
 pub(crate) fn substitute_credentials(
     sandbox: &Sandbox,
     url: reqwest::Url,
     body: Option<String>,
-) -> (reqwest::Url, Option<String>) {
+    headers: HashMap<String, String>,
+) -> (reqwest::Url, Option<String>, HashMap<String, String>) {
     let http = sandbox.http.read().unwrap();
     let host = url.host_str().unwrap_or("").to_owned();
 
@@ -198,7 +199,17 @@ pub(crate) fn substitute_credentials(
         b
     });
 
-    (url, body)
+    let headers = headers
+        .into_iter()
+        .map(|(k, mut v)| {
+            if has_credential(&v, &host, &http) {
+                replace_credentials(&mut v, &host, &http);
+            }
+            (k, v)
+        })
+        .collect();
+
+    (url, body, headers)
 }
 
 // ---------------------------------------------------------------------------
