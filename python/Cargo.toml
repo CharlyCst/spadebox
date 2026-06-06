@@ -2,7 +2,7 @@
 authors = ["Charly Castes <charly.castes@epfl.ch>"]
 edition = "2024"
 name = "spadebox-python"
-version = "0.5.0"
+version = "0.5.1"
 publish = false
 
 [lib]

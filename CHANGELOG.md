@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.1] - 2026-06-06
+
+### Added
+
+- **`fetch` credentials**: Support for authenticated requests via `add_credential`, available through Rust, JS, and
+  Python bindings.
+- **`fetch` request headers**: Set custom headers on fetch requests.
+- **`node:fs` module**: Extended coverage of the synchronous `node:fs` API in the JS runtime.
+
 ## [0.5.0] - 2026-06-01
 
 ### Added
