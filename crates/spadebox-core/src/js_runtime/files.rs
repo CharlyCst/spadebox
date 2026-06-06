@@ -75,6 +75,46 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
             1,
         )
         .function(
+            NativeFunction::from_copy_closure_with_captures(
+                unlink_sync,
+                SandboxCaptures {
+                    sandbox: Arc::clone(&sandbox),
+                },
+            ),
+            js_string!("unlinkSync"),
+            1,
+        )
+        .function(
+            NativeFunction::from_copy_closure_with_captures(
+                rename_sync,
+                SandboxCaptures {
+                    sandbox: Arc::clone(&sandbox),
+                },
+            ),
+            js_string!("renameSync"),
+            2,
+        )
+        .function(
+            NativeFunction::from_copy_closure_with_captures(
+                copy_file_sync,
+                SandboxCaptures {
+                    sandbox: Arc::clone(&sandbox),
+                },
+            ),
+            js_string!("copyFileSync"),
+            2,
+        )
+        .function(
+            NativeFunction::from_copy_closure_with_captures(
+                rm_sync,
+                SandboxCaptures {
+                    sandbox: Arc::clone(&sandbox),
+                },
+            ),
+            js_string!("rmSync"),
+            1,
+        )
+        .function(
             NativeFunction::from_copy_closure_with_captures(stat_sync, SandboxCaptures { sandbox }),
             js_string!("statSync"),
             1,
@@ -327,6 +367,113 @@ fn stat_sync(
 }
 
 // ---------------------------------------------------------------------------
+// fs.unlinkSync(path) -> undefined
+// ---------------------------------------------------------------------------
+
+fn unlink_sync(
+    _this: &JsValue,
+    args: &[JsValue],
+    captures: &SandboxCaptures,
+    _ctx: &mut Context,
+) -> JsResult<JsValue> {
+    let path = string_arg(args, 0, "path")?;
+    let files = captures.sandbox.files.read().unwrap();
+    let root = require_fs_root(captures, &files)?;
+
+    root.remove_file(&path)
+        .map_err(|e| JsNativeError::error().with_message(e.to_string()))?;
+
+    Ok(JsValue::undefined())
+}
+
+// ---------------------------------------------------------------------------
+// fs.renameSync(oldPath, newPath) -> undefined
+// ---------------------------------------------------------------------------
+
+fn rename_sync(
+    _this: &JsValue,
+    args: &[JsValue],
+    captures: &SandboxCaptures,
+    _ctx: &mut Context,
+) -> JsResult<JsValue> {
+    let old_path = string_arg(args, 0, "oldPath")?;
+    let new_path = string_arg(args, 1, "newPath")?;
+    let files = captures.sandbox.files.read().unwrap();
+    let root = require_fs_root(captures, &files)?;
+
+    root.rename(&old_path, root, &new_path)
+        .map_err(|e| JsNativeError::error().with_message(e.to_string()))?;
+
+    Ok(JsValue::undefined())
+}
+
+// ---------------------------------------------------------------------------
+// fs.copyFileSync(src, dest) -> undefined
+// ---------------------------------------------------------------------------
+
+fn copy_file_sync(
+    _this: &JsValue,
+    args: &[JsValue],
+    captures: &SandboxCaptures,
+    _ctx: &mut Context,
+) -> JsResult<JsValue> {
+    let src = string_arg(args, 0, "src")?;
+    let dest = string_arg(args, 1, "dest")?;
+    let files = captures.sandbox.files.read().unwrap();
+    let root = require_fs_root(captures, &files)?;
+
+    root.copy(&src, root, &dest)
+        .map_err(|e| JsNativeError::error().with_message(e.to_string()))?;
+
+    Ok(JsValue::undefined())
+}
+
+// ---------------------------------------------------------------------------
+// fs.rmSync(path, options?) -> undefined
+//
+// options.recursive: true  →  remove a directory tree (like rm -rf)
+// options.force: true      →  ignore errors if the path does not exist
+// ---------------------------------------------------------------------------
+
+fn rm_sync(
+    _this: &JsValue,
+    args: &[JsValue],
+    captures: &SandboxCaptures,
+    ctx: &mut Context,
+) -> JsResult<JsValue> {
+    let path = string_arg(args, 0, "path")?;
+    let opts = args.get(1).filter(|v| !v.is_undefined()).and_then(|v| v.as_object());
+
+    let recursive = opts
+        .as_ref()
+        .and_then(|o| o.get(js_string!("recursive"), ctx).ok())
+        .and_then(|v| v.as_boolean())
+        .unwrap_or(false);
+    let force = opts
+        .as_ref()
+        .and_then(|o| o.get(js_string!("force"), ctx).ok())
+        .and_then(|v| v.as_boolean())
+        .unwrap_or(false);
+
+    let files = captures.sandbox.files.read().unwrap();
+    let root = require_fs_root(captures, &files)?;
+
+    let result = if recursive {
+        root.remove_dir_all(&path)
+    } else {
+        root.remove_file(&path)
+    };
+
+    match result {
+        Ok(()) => {}
+        Err(e) if force && e.kind() == std::io::ErrorKind::NotFound => {}
+        Err(e) => return Err(JsNativeError::error().with_message(e.to_string()).into()),
+    }
+
+    Ok(JsValue::undefined())
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -466,5 +613,53 @@ mod tests {
         );
         assert_eq!(eval(&mut ctx, r#"fs.statSync("sub").isFile()"#), "false");
         assert!(eval_err(&mut ctx, r#"fs.statSync("nope.txt")"#).contains("JS error"));
+    }
+
+    #[test]
+    fn unlink_sync() {
+        let (mut ctx, _dir) = setup();
+        eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#);
+        assert_eq!(eval(&mut ctx, r#"fs.existsSync("a.txt")"#), "true");
+        assert_eq!(eval(&mut ctx, r#"fs.unlinkSync("a.txt")"#), "undefined");
+        assert_eq!(eval(&mut ctx, r#"fs.existsSync("a.txt")"#), "false");
+        assert!(eval_err(&mut ctx, r#"fs.unlinkSync("nope.txt")"#).contains("JS error"));
+    }
+
+    #[test]
+    fn rename_sync() {
+        let (mut ctx, _dir) = setup();
+        eval(&mut ctx, r#"fs.writeFileSync("old.txt", "content")"#);
+        assert_eq!(eval(&mut ctx, r#"fs.renameSync("old.txt", "new.txt")"#), "undefined");
+        assert_eq!(eval(&mut ctx, r#"fs.existsSync("old.txt")"#), "false");
+        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("new.txt")"#), r#""content""#);
+        assert!(eval_err(&mut ctx, r#"fs.renameSync("nope.txt", "x.txt")"#).contains("JS error"));
+    }
+
+    #[test]
+    fn copy_file_sync() {
+        let (mut ctx, _dir) = setup();
+        eval(&mut ctx, r#"fs.writeFileSync("src.txt", "hello")"#);
+        assert_eq!(eval(&mut ctx, r#"fs.copyFileSync("src.txt", "dst.txt")"#), "undefined");
+        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("src.txt")"#), r#""hello""#);
+        assert_eq!(eval(&mut ctx, r#"fs.readFileSync("dst.txt")"#), r#""hello""#);
+        assert!(eval_err(&mut ctx, r#"fs.copyFileSync("nope.txt", "dst.txt")"#).contains("JS error"));
+    }
+
+    #[test]
+    fn rm_sync() {
+        let (mut ctx, _dir) = setup();
+        // remove a file
+        eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#);
+        eval(&mut ctx, r#"fs.rmSync("a.txt")"#);
+        assert_eq!(eval(&mut ctx, r#"fs.existsSync("a.txt")"#), "false");
+        // remove a directory tree recursively
+        eval(&mut ctx, r#"fs.mkdirSync("sub/dir", { recursive: true })"#);
+        eval(&mut ctx, r#"fs.writeFileSync("sub/dir/f.txt", "x")"#);
+        eval(&mut ctx, r#"fs.rmSync("sub", { recursive: true })"#);
+        assert_eq!(eval(&mut ctx, r#"fs.existsSync("sub")"#), "false");
+        // force: true silences missing-path errors
+        assert_eq!(eval(&mut ctx, r#"fs.rmSync("nope.txt", { force: true })"#), "undefined");
+        // without force, missing path is an error
+        assert!(eval_err(&mut ctx, r#"fs.rmSync("nope.txt")"#).contains("JS error"));
     }
 }
