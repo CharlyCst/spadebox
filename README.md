@@ -5,7 +5,7 @@
     <img src="https://github.com/user-attachments/assets/d0611572-8b35-4d7e-9be1-b1143af419e1" width="200px" alt="The Spadebox logo" />
   </picture>
   <br/>
-  Shovels for your AI agents
+  Sandboxed tools and JS runtime for your AI agents
 
   [![crates.io version]][crates-io] [![NPM version]][npm] [![PyPI version]][pypi]
 </div>
@@ -19,8 +19,8 @@
 
 <br/>
 
-Spadebox is a set of tools for lightweight AI agents, written in Rust with JavaScript and Python bindings.
-Focus on your domain-specific tools — give your agent SpadeBox for the rest.
+SpadeBox is a set of sandboxed tools and a JS runtime for AI agents, written in Rust with JavaScript and Python bindings.
+Focus on your domain-specific tools and harness — give your agent SpadeBox for the rest.
 
 <div align="center">
 
@@ -34,26 +34,17 @@ Focus on your domain-specific tools — give your agent SpadeBox for the rest.
 
 ## Features
 
-**Lightweight sandboxing:**
+- **Lightweight sandboxing:** SpadeBox uses the [`cap-std` crate](https://github.com/bytecodealliance/cap-std) for file system sandboxing, and domain whitelisting for HTTP requests.
+  The JS engine is based on [boa](https://boajs.dev/), and uses the same sandboxing policies.
+- **Configurable:** Pick only the tools you need for your application: files, network, or code execution, or any combination of those.
+- **No `bash` tool:** SpadeBox has been designed to work well even _without_ a `bash` tool.
+  The tools are designed to cover all the basic operations an agent needs without having to shell-out.
+  If you would like your agent to use `bash` you can provide your own `bash` tool in addition to SpadeBox.
+- **Native function in JS runtime:** Expose native functions to the SpadeBox JS runtime to allow your agents to programmatically interact with your application.
+  Compatible with all supported host language bindings.
+- **Secret management for HTTP requests:** Register credentials for specific HTTP domains and get a token that can be safely shared with your agent. Spadebox replaces the token by the actual secret within HTTP requests to the target domain.
+- **Default limits to preserve context:** SpadeBox's tools try to safeguard your agent context, with default limits to tool outputs and HTML-to-markdown conversion.
 
-SpadeBox uses the [`cap-std` crate](https://github.com/bytecodealliance/cap-std) for file system sandboxing, and domain whitelisting for HTTP requests.
-The JS engine is based on [boa](https://boajs.dev/), and uses the same sandboxing policies.
-
-**No `bash` tool:**
-
-SpadeBox has been designed to work well even _without_ a `bash` tool.
-SpadeBox exposes a JS engine for code execution, and provides the common file system operations for your agent to be effective without needing to shell-out.
-If you would like your agent to use `bash` you can provide your own `bash` tool in addition to SpadeBox.
-
-**Just the tools:**
-
-SpadeBox does one thing: it provides tools.
-Write your own agent loop or use your favorite framework, SpadeBox doesn't have an opinion on that.
-
-**Small perks:**
-
-SpadeBox's tools include small quality of life features for your AI agents.
-Default tool output limit and HTML to markdown conversion protect the agent's context, while read-before-write rule limits risks of data losses.
 
 ## Usage
 
