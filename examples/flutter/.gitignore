@@ -43,3 +43,9 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Local machine configuration (contains SDK paths)
+android/local.properties
+
+# Generated Flutter plugin registrant (produced by flutter pub get)
+android/app/src/main/java/
