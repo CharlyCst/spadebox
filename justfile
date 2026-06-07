@@ -42,6 +42,15 @@ flutter-build-android:
 flutter-codegen:
     cd flutter && flutter_rust_bridge_codegen generate
 
+# Build the Dart native library (libspadebox_dart.so / .dylib / .dll).
+# After building, run the example with:
+#   dart run examples/dart/agent.dart <sandbox-path>
+dart-build:
+    cargo build -p spadebox-dart
+
+dart-build-release:
+    cargo build --release -p spadebox-dart
+
 # Start an OpenAI-compatible mock server
 mock-server:
     deno task mock-server

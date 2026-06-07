@@ -2865,6 +2865,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "spadebox-dart"
+version = "0.1.0"
+dependencies = [
+ "serde_json",
+ "spadebox-core",
+ "tokio",
+]
+
+[[package]]
 name = "spadebox-flutter"
 version = "0.1.0"
 dependencies = [
