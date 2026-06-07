@@ -1,0 +1,16 @@
+[package]
+name = "spadebox-flutter"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[lib]
+crate-type = ["cdylib", "staticlib"]
+name = "spadebox_flutter"
+
+[dependencies]
+flutter_rust_bridge = "2"
+spadebox-core = { path = "../crates/spadebox-core" }
+anyhow = { workspace = true }
+serde_json = { workspace = true }
+tokio = { workspace = true }

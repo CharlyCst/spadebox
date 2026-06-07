@@ -1,0 +1,27 @@
+name: spadebox_flutter
+description: Flutter bindings for SpadeBox — sandboxed AI agent tools for mobile.
+version: 0.1.0
+homepage: https://github.com/charlycst/spadebox
+
+environment:
+  sdk: '>=3.3.0 <4.0.0'
+  flutter: '>=3.22.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  flutter_rust_bridge: ^2.9.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^4.0.0
+  ffigen: ^18.0.0
+
+flutter:
+  plugin:
+    platforms:
+      android:
+        ffiPlugin: true
+      ios:
+        ffiPlugin: true

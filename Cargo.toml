@@ -5,6 +5,7 @@ members = [
     "python",
     "rust",
     "mcp",
+    "flutter",
 
     # Internal crates
     "crates/spadebox-core",
