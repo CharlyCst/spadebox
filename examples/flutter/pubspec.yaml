@@ -1,6 +1,7 @@
 name: spadebox_agent_example
 description: A Flutter app demonstrating a SpadeBox-powered local AI agent.
 version: 1.0.0+1
+publish_to: none
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
