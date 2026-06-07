@@ -6,7 +6,7 @@
 
 import 'dart:convert';
 import 'package:http/http.dart' as http;
-import 'package:spadebox_flutter/spadebox.dart';
+import 'package:spadebox_dart/spadebox.dart';
 
 // ---------------------------------------------------------------------------
 // Events

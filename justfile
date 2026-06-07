@@ -26,30 +26,30 @@ lint:
     deno lint
     deno fmt --check
 
-# Build the Flutter Android native library.
-# Prerequisites: cargo install cargo-ndk
-#                Android NDK pointed to by ANDROID_NDK_HOME or ndk.dir in local.properties
-flutter-build-android:
-    cargo ndk \
-        --target aarch64-linux-android \
-        --target x86_64-linux-android \
-        --output-dir flutter/android/src/main/jniLibs \
-        -p spadebox-flutter \
-        build --release
-
-# Generate the Dart–Rust FFI bridge (requires flutter_rust_bridge_codegen).
-# dart pub global activate flutter_rust_bridge_codegen
-flutter-codegen:
-    cd flutter && flutter_rust_bridge_codegen generate
-
 # Build the Dart native library (libspadebox_dart.so / .dylib / .dll).
-# After building, run the example with:
+# After building, run the CLI example with:
 #   dart run examples/dart/agent.dart <sandbox-path>
 dart-build:
     cargo build -p spadebox-dart
 
 dart-build-release:
     cargo build --release -p spadebox-dart
+
+# Generate the Dart–Rust FFI bridge (requires flutter_rust_bridge_codegen).
+# cargo install flutter_rust_bridge_codegen
+dart-codegen:
+    cd dart && flutter_rust_bridge_codegen generate
+
+# Build the Dart Android native library for Flutter apps.
+# Prerequisites: cargo install cargo-ndk
+#                Android NDK pointed to by ANDROID_NDK_HOME or ndk.dir in local.properties
+dart-build-android:
+    cargo ndk \
+        --target aarch64-linux-android \
+        --target x86_64-linux-android \
+        --output-dir dart/android/src/main/jniLibs \
+        -p spadebox-dart \
+        build --release
 
 # Start an OpenAI-compatible mock server
 mock-server:

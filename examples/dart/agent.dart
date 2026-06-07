@@ -12,116 +12,25 @@ import 'dart:convert';
 import 'dart:ffi';
 import 'dart:io';
 
-import 'package:ffi/ffi.dart';
-
-// ── Native handle type ───────────────────────────────────────────────────────
-
-final class _Sb extends Opaque {}
+import 'package:flutter_rust_bridge/flutter_rust_bridge_for_generated.dart'
+    show ExternalLibrary;
+import 'package:spadebox_dart/spadebox.dart';
 
 // ── Library loading ──────────────────────────────────────────────────────────
 
-DynamicLibrary _loadLib() {
+String _libPath() {
   final env = Platform.environment['SPADEBOX_LIB'];
-  if (env != null) return DynamicLibrary.open(env);
+  if (env != null) return env;
 
-  // Derive path from script location: examples/dart/ → ../../target/debug/
-  final repoRoot = File(Platform.script.toFilePath()).parent.parent.parent;
-  final libName = Platform.isLinux
+  // Derive repo root from script location: examples/dart/ → ../../
+  final repoRoot =
+      File(Platform.script.toFilePath()).parent.parent.parent.path;
+  final name = Platform.isLinux
       ? 'libspadebox_dart.so'
       : Platform.isMacOS
           ? 'libspadebox_dart.dylib'
           : 'spadebox_dart.dll';
-  final libPath = '${repoRoot.path}/target/debug/$libName';
-  try {
-    return DynamicLibrary.open(libPath);
-  } catch (_) {
-    stderr.writeln(
-        'Could not load $libPath.\n'
-        'Build the library first: cargo build -p spadebox-dart\n'
-        'Or set SPADEBOX_LIB to point to the compiled .so/.dylib/.dll.');
-    exit(1);
-  }
-}
-
-final _lib = _loadLib();
-
-// ── FFI function bindings ────────────────────────────────────────────────────
-
-final _sbCreate = _lib.lookupFunction<
-    Pointer<_Sb> Function(), Pointer<_Sb> Function()>('sb_create');
-
-final _sbDestroy = _lib.lookupFunction<Void Function(Pointer<_Sb>),
-    void Function(Pointer<_Sb>)>('sb_destroy');
-
-final _sbEnableFiles = _lib.lookupFunction<
-    Pointer<Char> Function(Pointer<_Sb>, Pointer<Char>),
-    Pointer<Char> Function(
-        Pointer<_Sb>, Pointer<Char>)>('sb_enable_files');
-
-final _sbEnableHttp = _lib.lookupFunction<Void Function(Pointer<_Sb>),
-    void Function(Pointer<_Sb>)>('sb_enable_http');
-
-final _sbToolsJson = _lib.lookupFunction<
-    Pointer<Char> Function(Pointer<_Sb>),
-    Pointer<Char> Function(Pointer<_Sb>)>('sb_tools_json');
-
-final _sbCallTool = _lib.lookupFunction<
-    Pointer<Char> Function(Pointer<_Sb>, Pointer<Char>, Pointer<Char>),
-    Pointer<Char> Function(Pointer<_Sb>, Pointer<Char>,
-        Pointer<Char>)>('sb_call_tool');
-
-final _sbFreeStr = _lib.lookupFunction<Void Function(Pointer<Char>),
-    void Function(Pointer<Char>)>('sb_free_str');
-
-// ── Dart wrapper ─────────────────────────────────────────────────────────────
-
-class SpadeBox {
-  final Pointer<_Sb> _handle;
-
-  SpadeBox() : _handle = _sbCreate();
-
-  void enableFiles(String path) {
-    final arena = Arena();
-    try {
-      final errPtr = _sbEnableFiles(
-          _handle, path.toNativeUtf8(allocator: arena).cast<Char>());
-      if (errPtr != nullptr) {
-        final err = errPtr.cast<Utf8>().toDartString();
-        _sbFreeStr(errPtr);
-        throw StateError('enableFiles failed: $err');
-      }
-    } finally {
-      arena.releaseAll();
-    }
-  }
-
-  void enableHttp() => _sbEnableHttp(_handle);
-
-  List<Map<String, dynamic>> tools() {
-    final ptr = _sbToolsJson(_handle);
-    final json = ptr.cast<Utf8>().toDartString();
-    _sbFreeStr(ptr);
-    return (jsonDecode(json) as List).cast<Map<String, dynamic>>();
-  }
-
-  ({bool isError, String output}) callTool(String name, String paramsJson) {
-    final arena = Arena();
-    try {
-      final ptr = _sbCallTool(
-        _handle,
-        name.toNativeUtf8(allocator: arena).cast<Char>(),
-        paramsJson.toNativeUtf8(allocator: arena).cast<Char>(),
-      );
-      final json = ptr.cast<Utf8>().toDartString();
-      _sbFreeStr(ptr);
-      final m = jsonDecode(json) as Map<String, dynamic>;
-      return (isError: m['isError'] as bool, output: m['output'] as String);
-    } finally {
-      arena.releaseAll();
-    }
-  }
-
-  void dispose() => _sbDestroy(_handle);
+  return '$repoRoot/target/debug/$name';
 }
 
 // ── Configuration ────────────────────────────────────────────────────────────
@@ -159,8 +68,7 @@ Future<Map<String, dynamic>> _chat(
     final payloadBytes = utf8.encode(jsonEncode({
       'model': _model,
       'messages': messages,
-      'tools': tools,
-      'tool_choice': 'auto',
+      if (tools.isNotEmpty) 'tools': tools,
     }));
     request.headers.contentLength = payloadBytes.length;
     request.add(payloadBytes);
@@ -191,14 +99,16 @@ Future<void> _runTurn(
       'tool_calls': response['tool_calls'],
     });
 
+    final content = response['content'] as String?;
+    if (content != null && content.trim().isNotEmpty) {
+      print('\n${_cyan}Agent:$_reset ${content.trim()}');
+    }
+
     final toolCalls =
         (response['tool_calls'] as List?)?.cast<Map<String, dynamic>>() ?? [];
 
     if (toolCalls.isEmpty) {
-      final content = response['content'] as String?;
-      if (content != null && content.isNotEmpty) {
-        print('\n${_cyan}Agent:$_reset $content\n');
-      }
+      print('');
       return;
     }
 
@@ -208,7 +118,7 @@ Future<void> _runTurn(
       final args = fn['arguments'] as String;
       print('\n${_blue}[call]$_reset $_gray$name($args)$_reset');
 
-      final result = sb.callTool(name, args);
+      final result = await sb.callTool(name: name, paramsJson: args);
       final tag = result.isError
           ? '$_red[error]$_reset'
           : '$_green[ok]$_reset';
@@ -231,19 +141,30 @@ void main(List<String> args) async {
     exit(1);
   }
 
-  final sandboxPath = args[0];
-  final sb = SpadeBox();
-  sb.enableFiles(sandboxPath);
-  // sb.enableHttp(); // Uncomment to allow the agent to fetch URLs
+  final libPath = _libPath();
+  try {
+    await RustLib.init(externalLibrary: ExternalLibrary.open(libPath));
+  } catch (e) {
+    stderr.writeln('Could not load $libPath\n'
+        'Build first: cargo build -p spadebox-dart\n'
+        'Or set SPADEBOX_LIB to point to the compiled .so/.dylib/.dll.\n'
+        'Details: $e');
+    exit(1);
+  }
 
-  final sbTools = sb.tools();
-  final tools = sbTools
+  final sandboxPath = args[0];
+  final sb = SpadeBox.new_();
+  await sb.enableFiles(path: sandboxPath);
+  // await sb.enableHttp(); // Uncomment to allow the agent to fetch URLs
+
+  final rawTools = await sb.tools();
+  final tools = rawTools
       .map((t) => {
             'type': 'function',
             'function': {
-              'name': t['name'],
-              'description': t['description'],
-              'parameters': t['inputSchema'],
+              'name': t.name,
+              'description': t.description,
+              'parameters': jsonDecode(t.inputSchema) as Map<String, dynamic>,
             },
           })
       .toList();
@@ -270,6 +191,4 @@ void main(List<String> args) async {
       stderr.writeln('Error: $e');
     }
   }
-
-  sb.dispose();
 }

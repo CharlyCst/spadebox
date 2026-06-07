@@ -5,7 +5,6 @@ members = [
     "python",
     "rust",
     "mcp",
-    "flutter",
     "dart",
 
     # Internal crates

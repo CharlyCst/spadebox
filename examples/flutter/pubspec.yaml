@@ -10,8 +10,8 @@ dependencies:
   flutter:
     sdk: flutter
   flutter_rust_bridge: ^2.9.0
-  spadebox_flutter:
-    path: ../../flutter
+  spadebox_dart:
+    path: ../../dart
   http: ^1.3.0
   path_provider: ^2.1.0
   shared_preferences: ^2.3.0

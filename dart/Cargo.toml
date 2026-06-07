@@ -5,10 +5,12 @@ edition = "2024"
 publish = false
 
 [lib]
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "staticlib"]
 name = "spadebox_dart"
 
 [dependencies]
+flutter_rust_bridge = "=2.12.0"
 spadebox-core = { path = "../crates/spadebox-core" }
+anyhow = { workspace = true }
 serde_json = { workspace = true }
 tokio = { workspace = true }
