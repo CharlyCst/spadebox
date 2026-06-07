@@ -66,7 +66,8 @@ Stream<AgentEvent> runAgent({
   required String task,
 }) async* {
   // Derive tool definitions from the live sandbox configuration.
-  final tools = sandbox.tools().map((t) => {
+  final rawTools = await sandbox.tools();
+  final tools = rawTools.map((t) => {
         'type': 'function',
         'function': {
           'name': t.name,

@@ -9,7 +9,7 @@ crate-type = ["cdylib", "staticlib"]
 name = "spadebox_flutter"
 
 [dependencies]
-flutter_rust_bridge = "2"
+flutter_rust_bridge = "=2.12.0"
 spadebox-core = { path = "../crates/spadebox-core" }
 anyhow = { workspace = true }
 serde_json = { workspace = true }

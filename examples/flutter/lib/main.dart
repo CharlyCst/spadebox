@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:path_provider/path_provider.dart';
@@ -68,8 +69,15 @@ class _AgentScreenState extends State<AgentScreen> {
   void initState() {
     super.initState();
     _loadSettings();
-    getApplicationDocumentsDirectory()
-        .then((d) => setState(() => _sandboxPath = d.path));
+    getApplicationDocumentsDirectory().then(
+      (d) => setState(() => _sandboxPath = d.path),
+      onError: (_) {
+        // Fallback for environments without XDG dirs (e.g. containers).
+        const fallback = '/tmp/spadebox_sandbox';
+        Directory(fallback).createSync(recursive: true);
+        setState(() => _sandboxPath = fallback);
+      },
+    );
   }
 
   Future<void> _loadSettings() async {
@@ -111,7 +119,7 @@ class _AgentScreenState extends State<AgentScreen> {
     });
 
     final sandbox = SpadeBox.new_();
-    sandbox.enableFiles(_sandboxPath!);
+    await sandbox.enableFiles(path: _sandboxPath!);
 
     await for (final event in runAgent(
       sandbox: sandbox,
@@ -422,7 +430,7 @@ class _LogTile extends StatelessWidget {
                 padding: const EdgeInsets.all(8),
                 decoration: BoxDecoration(
                   color: theme.colorScheme.surfaceContainerHighest
-                      .withOpacity(0.6),
+                      .withValues(alpha: 0.6),
                   borderRadius: BorderRadius.circular(4),
                 ),
                 child: Text(
