@@ -19,7 +19,6 @@ any other state defined in previous calls are available in subsequent ones.
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "JsReplParams",
-  "description": "Parameters for the `js_repl` tool.",
   "type": "object",
   "properties": {
     "code": {

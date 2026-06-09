@@ -43,7 +43,11 @@ function extractSnippet(source: string, region: string, sourcePath: string): str
   const end = lines.findIndex((l, i) => i > start && l.includes(endTag))
   if (end === -1) throw new Error(`End of snippet "${region}" not found in ${sourcePath}`)
 
-  return lines.slice(start + 1, end).join('\n').trimEnd()
+  const snippet = lines.slice(start + 1, end)
+  const indent = Math.min(
+    ...snippet.filter((l) => l.trim().length > 0).map((l) => l.match(/^(\s*)/)![1].length),
+  )
+  return snippet.map((l) => l.slice(indent)).join('\n').trimEnd()
 }
 
 // Matches {/* snippet: path#region */} ... {/* /snippet */}

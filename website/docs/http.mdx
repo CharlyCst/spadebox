@@ -1,0 +1,124 @@
+---
+sidebar_position: 3
+---
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+# HTTP
+
+SpadeBox can expose a `fetch` tool for agents to interact with HTTP services.
+The `fetch` tool can be enabled with:
+
+<Tabs groupId="lang">
+  <TabItem value="js" label="TypeScript">
+
+{/* snippet: js/test/index.test.ts#enable-http */}
+```ts
+const sb = new SpadeBox()
+  .enableHttp()
+  .allow('api.example.com', ['GET', 'POST'])
+  .allow('*.cdn.example.com', ['GET'])
+```
+{/* /snippet */}
+
+  </TabItem>
+  <TabItem value="python" label="Python">
+
+{/* snippet: python/test/test_index.py#enable-http */}
+```python
+sb = (SpadeBox().enable_http()
+      .allow("api.example.com", ["GET", "POST"])
+      .allow("*.cdn.example.com", ["GET"]))
+```
+{/* /snippet */}
+
+  </TabItem>
+  <TabItem value="rust" label="Rust">
+
+{/* snippet: rust/tests/integration_test.rs#enable-http */}
+```rust
+let sb = SpadeBox::new()
+    .enable_http()
+    .allow("api.example.com", &["GET", "POST"])
+    .unwrap()
+    .allow("*.cdn.example.com", &["GET"])
+    .unwrap();
+```
+{/* /snippet */}
+
+  </TabItem>
+</Tabs>
+
+:::warning
+
+Enabling HTTP requests can be a security risk for two reasons:
+
+1. HTTP requests can be an entry point for prompt injections.
+   A malicious actor on the web can deliberately provide harmful instructions
+   on seemingly benign web pages or APIs.
+2. HTTP requests can be used as an exfiltration vector.
+   Granting an agent access to both sensitive data and the ability to send HTTP
+   requests can result in data leakage.
+
+:::
+
+## Domains Allowlist
+
+By default no domains are allowed. Every `allow` call adds a rule mapping a
+domain pattern to a set of permitted HTTP verbs. Rules are matched against the
+request hostname; any host not covered by a rule is rejected.
+
+Patterns support three forms:
+
+| Pattern | Example | Matches |
+|---|---|---|
+| Exact hostname | `api.example.com` | That host only |
+| Wildcard subdomain | `*.example.com` | Any subdomain of `example.com` |
+| Catch-all | `*` | Any host |
+
+When multiple rules match the same hostname, the most specific one wins
+(longest literal suffix). The supported verbs are `GET`, `POST`, `PUT`,
+`PATCH`, `DELETE`, and `HEAD`.
+
+## Credentials
+
+`addCredential` / `add_credential` lets you register a secret and get back an
+opaque token (e.g. `SPADB-a3f7...`). The token can be passed to the agent: it
+looks like a placeholder and carries no secret information. When the agent
+includes the token in a request URL, body, or header, SpadeBox substitutes the
+real value at fetch time, but only when the target host matches one of the
+domain patterns supplied at registration.
+
+This keeps secrets out of the LLM context while still letting the agent
+authenticate against allowed APIs:
+
+<Tabs groupId="lang">
+  <TabItem value="js" label="TypeScript">
+
+```ts
+const token = sb.addCredential('github-token', process.env.GITHUB_TOKEN, ['api.github.com'])
+// Give the token to the agent, e.g. in the system prompt:
+// "Use 'Authorization: Bearer <token>' for GitHub API calls."
+```
+
+  </TabItem>
+  <TabItem value="python" label="Python">
+
+```python
+token = sb.add_credential("github-token", os.environ["GITHUB_TOKEN"], ["api.github.com"])
+# Give the token to the agent, e.g. in the system prompt:
+# "Use 'Authorization: Bearer <token>' for GitHub API calls."
+```
+
+  </TabItem>
+  <TabItem value="rust" label="Rust">
+
+```rust
+let token = sb.add_credential("github-token", &github_token, ["api.github.com"]);
+// Give the token to the agent, e.g. in the system prompt:
+// "Use 'Authorization: Bearer <token>' for GitHub API calls."
+```
+
+  </TabItem>
+</Tabs>

@@ -1,0 +1,116 @@
+---
+sidebar_position: 4
+---
+
+# JavaScript Runtime
+
+SpadeBox provides a sandboxed JavaScript runtime to enable safe code execution without requiring a `bash` tool.
+JavaScript execution must be enabled explicitely:
+
+import Tabs from '@theme/Tabs';
+import TabItem from '@theme/TabItem';
+
+<Tabs groupId="lang">
+  <TabItem value="js" label="TypeScript">
+
+{/* snippet: js/test/index.test.ts#enable-js */}
+```ts
+const sb = new SpadeBox().enableJs()
+```
+{/* /snippet */}
+
+  </TabItem>
+  <TabItem value="python" label="Python">
+
+{/* snippet: python/test/test_index.py#enable-js */}
+```python
+sb = SpadeBox().enable_js()
+```
+{/* /snippet */}
+
+  </TabItem>
+  <TabItem value="rust" label="Rust">
+
+{/* snippet: rust/tests/integration_test.rs#enable-js */}
+```rust
+let sb = SpadeBox::new().enable_js();
+```
+{/* /snippet */}
+
+  </TabItem>
+</Tabs>
+
+There are two JavaScript tools:
+- `js_repl`: A persistant JavaScript environment.
+  Enabled when JavaScript execution is enabled.
+- `js_exec`: A tool for executing JavaScript files.
+  Enabled when both JavaScript and filesystem tools are enabled.
+
+## JavaScript Runtime
+
+SpadeBox includes a custom JavaScript runtime based on the [Boa
+engine](https://boajs.dev/). The SpadeBox runtime respects the same security
+policies as the other spadebox tools. For instance, the filesystem access is
+restricted to the sandbox, and HTTP requests are subject to the same allowlist
+policy and credential mechanism as the `fetch` tool.
+
+The SpadeBox runtime exposes only a subset of the modules and methods available
+in other common runtimes, such as `node:fs` and `fetch`. We expect that subset
+to increase over time.
+
+:::note
+
+The SpadeBox JavaScript runtime is independent of the host environment. In
+particular, when using SpadeBox from JavaScript the SpadeBox JavaScript runtime
+is completely isolated from the host JavaScript runtime (such as Node.js).
+
+:::
+
+## Exposing Host Functions
+
+It is possible to allow an AI agent to programatically interact with the host
+environment by exposing host functions as JavaScript functions in the SpadeBox
+JavaScript runtime.
+For instance, for an home automation agent one could expose functions to control the lights directly to the SpadeBox JavaScript runtime.
+
+Host functions can be exposed to the SpadeBox runtime by doing as follow:
+
+<Tabs groupId="lang">
+  <TabItem value="js" label="TypeScript">
+
+{/* snippet: js/test/index.test.ts#expose-js-func */}
+```ts
+const sb2 = new SpadeBox().enableJs()
+sb2.exposeJsFunc('double', ['n'], ({ n }) => (n as number) * 2)
+const result = await sb2.jsRepl('double(21)')
+```
+{/* /snippet */}
+
+  </TabItem>
+  <TabItem value="python" label="Python">
+
+{/* snippet: python/test/test_index.py#expose-js-func */}
+```python
+sb2 = SpadeBox().enable_js()
+sb2.expose_js_func('double', ['n'], lambda args: args['n'] * 2)
+result = sb2.js_repl('double(21)')
+```
+{/* /snippet */}
+
+  </TabItem>
+  <TabItem value="rust" label="Rust">
+
+{/* snippet: rust/tests/integration_test.rs#expose-js-func */}
+```rust
+let sb2 = SpadeBox::new().enable_js();
+sb2.expose_js_func("double", ["n"], |args| {
+    let n = args["n"].as_i64().unwrap_or(0);
+    Ok(serde_json::Value::Number((n * 2).into()))
+}).unwrap();
+let result = sb2.js_repl("double(21)").await.unwrap();
+```
+{/* /snippet */}
+
+  </TabItem>
+</Tabs>
+

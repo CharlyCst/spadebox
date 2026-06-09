@@ -18,6 +18,10 @@ HTTP method to use (e.g. `"GET"`, `"POST"`).
 
 Optional request body (for POST, PUT, PATCH).
 
+**`headers`** (object, optional)
+
+Optional HTTP headers to include in the request (e.g. `{"Authorization": "Bearer token"}`).
+
 **`raw`** (boolean, optional)
 
 When `true` return the raw response body, otherwise process the content for efficient LLM
@@ -49,6 +53,16 @@ Maximum number of bytes to return. Defaults to 20 000. Set to 0 to disable.
         "string",
         "null"
       ]
+    },
+    "headers": {
+      "description": "Optional HTTP headers to include in the request (e.g. `{\"Authorization\": \"Bearer token\"}`).",
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": {
+        "type": "string"
+      }
     },
     "raw": {
       "description": "When `true` return the raw response body, otherwise process the content for efficient LLM\nconsumption (e.g. convert HTML to markdown). Default to `false`",

@@ -74,6 +74,23 @@ def test_path_traversal_is_rejected(tmp_path):
         sb.read_file('../etc/passwd')
 
 
+# --- js runtime ---
+
+def test_js_runtime():
+    # [snippet: enable-js]
+    sb = SpadeBox().enable_js()
+    # [/snippet]
+    names = [t.name for t in sb.tools()]
+    assert "js_repl" in names
+
+    # [snippet: expose-js-func]
+    sb2 = SpadeBox().enable_js()
+    sb2.expose_js_func('double', ['n'], lambda args: args['n'] * 2)
+    result = sb2.js_repl('double(21)')
+    # [/snippet]
+    assert result == '42'
+
+
 # --- js_repl ---
 
 def test_js_repl_evaluates_an_expression():
@@ -136,14 +153,28 @@ def test_expose_js_func_requires_js_enabled():
         sb.expose_js_func('f', [], lambda args: None)
 
 
+# --- fetch (HTTP) ---
+
+def test_enable_http_makes_fetch_tool_available():
+    # [snippet: enable-http]
+    sb = (SpadeBox().enable_http()
+          .allow("api.example.com", ["GET", "POST"])
+          .allow("*.cdn.example.com", ["GET"]))
+    # [/snippet]
+    names = [t.name for t in sb.tools()]
+    assert "fetch" in names
+
+
 # --- call_tool ---
 
 def test_call_tool_dispatches_read_file_and_returns_output(tmp_path):
     sb = SpadeBox().enable_files(str(tmp_path))
     sb.write_file('hello.txt', 'hi from call_tool')
+    # [snippet: call-tool]
     result = sb.call_tool('read_file', json.dumps({'path': 'hello.txt'}))
     assert not result.is_error
     assert result.output == 'hi from call_tool'
+    # [/snippet]
 
 
 def test_call_tool_returns_is_error_for_tool_level_errors(tmp_path):

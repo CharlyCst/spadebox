@@ -99,6 +99,23 @@ Deno.test('path traversal is rejected', async () => {
   })
 })
 
+// --- js runtime ---
+
+Deno.test('js runtime', async () => {
+  // [snippet: enable-js]
+  const sb = new SpadeBox().enableJs()
+  // [/snippet]
+  const names = sb.tools().map((t) => t.name)
+  assert(names.includes('js_repl'))
+
+  // [snippet: expose-js-func]
+  const sb2 = new SpadeBox().enableJs()
+  sb2.exposeJsFunc('double', ['n'], ({ n }) => (n as number) * 2)
+  const result = await sb2.jsRepl('double(21)')
+  // [/snippet]
+  assertEquals(result, '42')
+})
+
 // --- jsRepl ---
 
 Deno.test('jsRepl evaluates an expression', async () => {
@@ -186,15 +203,30 @@ Deno.test('exposeJsFunc async void function (no return value) does not throw', a
   assertEquals(result, 'null')
 })
 
+// --- fetch (HTTP) ---
+
+Deno.test('enableHttp makes the fetch tool available', () => {
+  // [snippet: enable-http]
+  const sb = new SpadeBox()
+    .enableHttp()
+    .allow('api.example.com', ['GET', 'POST'])
+    .allow('*.cdn.example.com', ['GET'])
+  // [/snippet]
+  const names = sb.tools().map((t) => t.name)
+  assert(names.includes('fetch'))
+})
+
 // --- callTool ---
 
 Deno.test('callTool dispatches read_file and returns output', async () => {
   await withTmpDir(async (dir) => {
     const sb = new SpadeBox().enableFiles(dir)
     await sb.writeFile('hello.txt', 'hi from callTool')
+    // [snippet: call-tool]
     const result = await sb.callTool('read_file', JSON.stringify({ path: 'hello.txt' }))
     assert(!result.isError)
     assertEquals(result.output, 'hi from callTool')
+    // [/snippet]
   })
 })
 

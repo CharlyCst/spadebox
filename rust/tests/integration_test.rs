@@ -117,6 +117,27 @@ async fn grep() {
     assert_eq!(result, "No matches found.");
 }
 
+// --- js runtime ---
+
+#[tokio::test]
+async fn js_runtime() {
+    // [snippet: enable-js]
+    let sb = SpadeBox::new().enable_js();
+    // [/snippet]
+    let names: Vec<_> = sb.tools().into_iter().map(|t| t.name).collect();
+    assert!(names.contains(&"js_repl".to_owned()));
+
+    // [snippet: expose-js-func]
+    let sb2 = SpadeBox::new().enable_js();
+    sb2.expose_js_func("double", ["n"], |args| {
+        let n = args["n"].as_i64().unwrap_or(0);
+        Ok(serde_json::Value::Number((n * 2).into()))
+    }).unwrap();
+    let result = sb2.js_repl("double(21)").await.unwrap();
+    // [/snippet]
+    assert_eq!(result, "42");
+}
+
 // --- JS REPL ---
 
 #[tokio::test]
@@ -238,6 +259,22 @@ async fn expose_js_func_requires_js_enabled() {
     assert!(err.is_err());
 }
 
+// --- HTTP ---
+
+#[test]
+fn enable_http() {
+    // [snippet: enable-http]
+    let sb = SpadeBox::new()
+        .enable_http()
+        .allow("api.example.com", &["GET", "POST"])
+        .unwrap()
+        .allow("*.cdn.example.com", &["GET"])
+        .unwrap();
+    // [/snippet]
+    let names: Vec<_> = sb.tools().into_iter().map(|t| t.name).collect();
+    assert!(names.contains(&"fetch".to_owned()));
+}
+
 // --- call_tool ---
 
 #[tokio::test]
@@ -249,12 +286,14 @@ async fn call_tool() {
         .unwrap();
 
     // successful dispatch returns output with is_error = false
+    // [snippet: call-tool]
     let result = sb
         .call_tool("read_file", r#"{"path":"hello.txt"}"#)
         .await
         .unwrap();
     assert!(!result.is_error);
     assert_eq!(result.output, "hi from call_tool");
+    // [/snippet]
 
     // tool-level errors set is_error = true instead of returning Err
     let result = sb
