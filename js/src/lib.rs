@@ -382,14 +382,15 @@ impl SpadeBox {
               let _ = tx.send(Err(e.to_string()));
             }
             Ok(promise) => {
-              // The Promise resolves via JS microtasks on the event loop thread.
-              // We spawn a dedicated OS thread blocking on the SpadeBox runtime
-              // so the event loop can continue running (processing the .then()
-              // callback) while Boa blocks on rx.recv() waiting for the result.
-              std::thread::spawn(move || {
+              // The Promise resolves via JS microtasks on the event loop
+              // thread, so it must be awaited elsewhere: spawn the await on
+              // the SpadeBox runtime, leaving the event loop free to run the
+              // resolution while Boa blocks on rx.recv() for the result.
+              spadebox_core::runtime::handle().spawn(async move {
                 // undefined/null resolve to None; treat both as JSON null.
                 let _ = tx.send(
-                  spadebox_core::runtime::block_on(promise)
+                  promise
+                    .await
                     .map_err(|e| e.to_string())
                     .map(|opt| opt.unwrap_or(serde_json::Value::Null)),
                 );
