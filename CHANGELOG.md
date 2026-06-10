@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.5.2] - 2026-06-10
+
+### Fixed
+
+- **Memory leak**: Fixed an Arc cycle that prevented `Sandbox` from being dropped when a JS REPL session was active.
+
+### Changed
+
+- **I/O performance**: Removed `spawn_blocking` from file I/O operations; I/O now runs directly on the async runtime.
+
 ## [0.5.1] - 2026-06-06
 
 ### Added

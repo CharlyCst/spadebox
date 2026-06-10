@@ -4,7 +4,7 @@ build-backend = "maturin"
 
 [project]
 name = "spadebox"
-version = "0.5.1"
+version = "0.5.2"
 readme = "README.md"
 description = "Tools for your AI agents"
 license = { text = "MIT" }

@@ -132,7 +132,8 @@ async fn js_runtime() {
     sb2.expose_js_func("double", ["n"], |args| {
         let n = args["n"].as_i64().unwrap_or(0);
         Ok(serde_json::Value::Number((n * 2).into()))
-    }).unwrap();
+    })
+    .unwrap();
     let result = sb2.js_repl("double(21)").await.unwrap();
     // [/snippet]
     assert_eq!(result, "42");
