@@ -3,6 +3,7 @@
   "tasks": {
     "mock-server": "deno run --allow-net tests/mock_openai_api/main.ts",
     "website": "cd website && deno run start",
+    "website:build": "deno task website:update && cd website && node ../node_modules/.bin/docusaurus build",
     "website:update": "deno run --allow-run --allow-read --allow-write website/scripts/generate-tools.ts && deno run --allow-read --allow-write website/scripts/inject-snippets.ts",
     "test": "deno run --allow-run --allow-read --allow-write --allow-net --allow-env tests/runner/main.ts"
   },
