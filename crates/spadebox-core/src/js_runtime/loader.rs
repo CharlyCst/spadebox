@@ -1,4 +1,11 @@
-use std::{cell::RefCell, collections::HashMap, io::Read, path::PathBuf, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell,
+    collections::HashMap,
+    io::Read,
+    path::PathBuf,
+    rc::Rc,
+    sync::{Arc, Weak},
+};
 
 use boa_engine::{
     Context, JsError, JsNativeError, JsResult, JsString, JsValue, Module, NativeFunction, Source,
@@ -15,8 +22,11 @@ use crate::{AsArc, Sandbox, tool_utils};
 
 /// Module loader that resolves built-in SpadeBox modules (`fs`, `node:fs`) and
 /// ES module files from the sandbox filesystem.
+///
+/// Holds only a weak sandbox reference, for the same cycle-avoidance reason as
+/// [`super::SandboxCaptures`].
 pub(super) struct SpadeboxModuleLoader {
-    pub sandbox: Arc<Sandbox>,
+    sandbox: Weak<Sandbox>,
     module_cache: RefCell<HashMap<PathBuf, Module>>,
 }
 
@@ -44,11 +54,21 @@ impl boa_engine::gc::Finalize for RequireCaptures {}
 
 impl SpadeboxModuleLoader {
     pub fn new(sandbox: impl AsArc<Sandbox>) -> Self {
-        let sandbox = sandbox.as_arc();
         Self {
-            sandbox,
+            sandbox: sandbox.as_weak(),
             module_cache: RefCell::new(HashMap::new()),
         }
+    }
+
+    /// Upgrades to a strong sandbox reference, or throws a JS error if the
+    /// sandbox was dropped. Cannot fail while an evaluation is running — see
+    /// [`super::SandboxCaptures::sandbox`].
+    fn sandbox(&self) -> JsResult<Arc<Sandbox>> {
+        self.sandbox.upgrade().ok_or_else(|| {
+            JsNativeError::error()
+                .with_message("sandbox has been dropped")
+                .into()
+        })
     }
 }
 
@@ -64,7 +84,7 @@ impl ModuleLoader for SpadeboxModuleLoader {
         // Built-in modules take priority over file resolution.
         // Split into two statements so the RefMut from borrow_mut() is dropped before
         // into_es_module takes its own borrow (if let extends scrutinee temporaries).
-        let builtin = self.builtin_module_value(&spec, &mut context.borrow_mut());
+        let builtin = self.builtin_module_value(&spec, &mut context.borrow_mut())?;
         if let Some(value) = builtin {
             return into_es_module(value, &mut context.borrow_mut());
         }
@@ -99,13 +119,13 @@ impl SpadeboxModuleLoader {
     }
 
     /// Returns the `JsValue` for a built-in module specifier, or `None` if not a built-in.
-    fn builtin_module_value(&self, spec: &str, ctx: &mut Context) -> Option<JsValue> {
+    fn builtin_module_value(&self, spec: &str, ctx: &mut Context) -> JsResult<Option<JsValue>> {
         match spec {
-            "fs" | "node:fs" => Some(JsValue::from(files::build_fs_object(
+            "fs" | "node:fs" => Ok(Some(JsValue::from(files::build_fs_object(
                 ctx,
-                Arc::clone(&self.sandbox),
-            ))),
-            _ => None,
+                &self.sandbox()?,
+            )))),
+            _ => Ok(None),
         }
     }
 
@@ -131,13 +151,14 @@ impl SpadeboxModuleLoader {
     }
 
     fn read_from_sandbox(&self, path: &PathBuf, spec: &str) -> JsResult<String> {
-        if !self.sandbox.fs_is_enabled() {
+        let sandbox = self.sandbox()?;
+        if !sandbox.fs_is_enabled() {
             return Err(JsNativeError::error()
                 .with_message("file system access is not enabled")
                 .into());
         }
 
-        let files = self.sandbox.files.read().unwrap();
+        let files = sandbox.files.read().unwrap();
         let root = files.root.as_ref().ok_or_else(|| -> JsError {
             JsNativeError::error()
                 .with_message("no file system root configured")
@@ -217,7 +238,7 @@ pub(super) fn register_require(ctx: &mut Context, loader: Rc<SpadeboxModuleLoade
                     })?
                     .to_std_string_lossy();
 
-                if let Some(value) = captures.loader.builtin_module_value(&spec, ctx) {
+                if let Some(value) = captures.loader.builtin_module_value(&spec, ctx)? {
                     return Ok(value);
                 }
 
@@ -270,17 +291,18 @@ mod tests {
     use super::super::JsContext;
     use crate::Sandbox;
 
-    fn setup() -> (JsContext, TempDir) {
+    // The sandbox must be returned: the context only holds weak references.
+    fn setup() -> (JsContext, Arc<Sandbox>, TempDir) {
         let dir = TempDir::new().unwrap();
         let sandbox = Arc::new(Sandbox::new());
         sandbox.enable_fs(dir.path()).unwrap();
-        let ctx = JsContext::new(sandbox);
-        (ctx, dir)
+        let ctx = JsContext::new(&sandbox);
+        (ctx, sandbox, dir)
     }
 
     #[test]
     fn require() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         // require('fs') returns an object with all fs functions
         ctx.eval(r#"const fs = require('fs')"#).unwrap();
         ctx.eval(r#"fs.writeFileSync("a.txt", "hi")"#).unwrap();
@@ -307,7 +329,7 @@ mod tests {
 
     #[test]
     fn require_file() {
-        let (mut ctx, dir) = setup();
+        let (mut ctx, _sandbox, dir) = setup();
         std::fs::write(
             dir.path().join("utils.js"),
             "export function double(x) { return x * 2; }",

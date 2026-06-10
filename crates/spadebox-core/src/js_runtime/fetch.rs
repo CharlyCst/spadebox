@@ -16,11 +16,11 @@ use crate::{Sandbox, ToolError};
 use super::SandboxCaptures;
 
 /// Registers the global `fetch(url, options?)` function.
-pub(super) fn register(ctx: &mut Context, sandbox: Arc<Sandbox>) {
+pub(super) fn register(ctx: &mut Context, sandbox: &Arc<Sandbox>) {
     ctx.register_global_builtin_callable(
         js_string!("fetch"),
         2,
-        NativeFunction::from_copy_closure_with_captures(fetch_fn, SandboxCaptures { sandbox }),
+        NativeFunction::from_copy_closure_with_captures(fetch_fn, SandboxCaptures::new(sandbox)),
     )
     .expect("failed to register fetch");
 }
@@ -87,7 +87,7 @@ fn fetch_fn(
     }
 
     // --- Security check (synchronous, before enqueuing any async work) ---
-    let sandbox = Arc::clone(&captures.sandbox);
+    let sandbox = captures.sandbox()?;
 
     let (validated_url, user_agent) =
         validate_request(&sandbox, &url_str, &method_str).map_err(|e| match e {
@@ -261,14 +261,15 @@ mod tests {
     fn fetch_permissions() {
         // HTTP not enabled — fetch throws synchronously.
         let sandbox = Arc::new(Sandbox::new());
-        let mut ctx = JsContext::new(sandbox);
+        let mut ctx = JsContext::new(&sandbox);
         assert!(
             ctx.eval(r#"fetch("https://example.com")"#).is_err(),
             "should throw when HTTP disabled"
         );
 
         // Invalid URL.
-        let mut ctx = JsContext::new(sandbox_with_http());
+        let sandbox = sandbox_with_http();
+        let mut ctx = JsContext::new(&sandbox);
         assert!(
             ctx.eval(r#"fetch("not a url")"#).is_err(),
             "should throw on invalid URL"
@@ -285,7 +286,7 @@ mod tests {
         sandbox
             .enable_http()
             .allow(DomainRule::new("allowed.com", vec![HttpVerb::Get]).unwrap());
-        let mut ctx = JsContext::new(sandbox);
+        let mut ctx = JsContext::new(&sandbox);
         assert!(
             ctx.eval(r#"fetch("https://blocked.com")"#).is_err(),
             "should throw for blocked domain"
@@ -322,7 +323,8 @@ mod tests {
             }
         });
 
-        let mut ctx = JsContext::new(sandbox_with_http());
+        let sandbox = sandbox_with_http();
+        let mut ctx = JsContext::new(&sandbox);
         ctx.eval(&format!(
             r#"
             let a, b;

@@ -1,5 +1,5 @@
 use std::collections::HashMap;
-use std::sync::Arc;
+use std::sync::{Arc, Weak};
 
 use serde::Deserialize;
 
@@ -19,21 +19,34 @@ pub const DEFAULT_MAX_BYTES: u64 = 20_000;
 
 /// A simple trait for Arc ergonomics.
 ///
-/// [AsArc] is implemented for both `Arc` and `&Arc`, and enables cloning on demand.
+/// [AsArc] is implemented for both `Arc` and `&Arc`, and enables cloning or
+/// downgrading on demand.
 pub trait AsArc<T> {
     #[allow(clippy::wrong_self_convention)]
     fn as_arc(self) -> Arc<T>;
+
+    /// Returns a weak reference to the underlying value.
+    #[allow(clippy::wrong_self_convention)]
+    fn as_weak(self) -> Weak<T>;
 }
 
 impl<T> AsArc<T> for Arc<T> {
     fn as_arc(self) -> Arc<T> {
         self // Move
     }
+
+    fn as_weak(self) -> Weak<T> {
+        Arc::downgrade(&self)
+    }
 }
 
 impl<T> AsArc<T> for &Arc<T> {
     fn as_arc(self) -> Arc<T> {
         Arc::clone(self) // Clone
+    }
+
+    fn as_weak(self) -> Weak<T> {
+        Arc::downgrade(self)
     }
 }
 

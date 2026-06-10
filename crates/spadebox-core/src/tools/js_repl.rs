@@ -190,6 +190,31 @@ mod tests {
         assert_eq!(result, "21");
     }
 
+    /// Dropping the last external `Sandbox` reference must actually free it,
+    /// even after the REPL task has started: the task and its `JsContext` hold
+    /// only weak references, so no `Arc` cycle keeps the sandbox (and the
+    /// blocking-pool thread) alive. The REPL loop releases its temporary
+    /// strong reference before replying, making this check deterministic.
+    #[tokio::test]
+    async fn sandbox_freed_after_drop() {
+        let sandbox = js_sandbox();
+        JsReplTool::run(
+            &sandbox,
+            JsReplParams {
+                code: "let x = 42".into(),
+            },
+        )
+        .await
+        .unwrap();
+
+        let weak = Arc::downgrade(&sandbox);
+        drop(sandbox);
+        assert!(
+            weak.upgrade().is_none(),
+            "REPL task must not keep the sandbox alive"
+        );
+    }
+
     #[tokio::test]
     async fn exposed_func_persists_across_repl_calls() {
         let sandbox = js_sandbox();

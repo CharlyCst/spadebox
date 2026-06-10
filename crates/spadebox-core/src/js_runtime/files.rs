@@ -12,14 +12,12 @@ use super::SandboxCaptures;
 use crate::Sandbox;
 
 /// Builds the `fs` object with Node-compatible synchronous file APIs.
-pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_engine::JsObject {
+pub(super) fn build_fs_object(ctx: &mut Context, sandbox: &Arc<Sandbox>) -> boa_engine::JsObject {
     ObjectInitializer::new(ctx)
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 read_file_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
+                SandboxCaptures::new(sandbox),
             ),
             js_string!("readFileSync"),
             1,
@@ -27,9 +25,7 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 write_file_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
+                SandboxCaptures::new(sandbox),
             ),
             js_string!("writeFileSync"),
             2,
@@ -37,9 +33,7 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 append_file_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
+                SandboxCaptures::new(sandbox),
             ),
             js_string!("appendFileSync"),
             2,
@@ -47,9 +41,7 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 exist_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
+                SandboxCaptures::new(sandbox),
             ),
             js_string!("existsSync"),
             1,
@@ -57,9 +49,7 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 readdir_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
+                SandboxCaptures::new(sandbox),
             ),
             js_string!("readdirSync"),
             1,
@@ -67,9 +57,7 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 mkdir_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
+                SandboxCaptures::new(sandbox),
             ),
             js_string!("mkdirSync"),
             1,
@@ -77,9 +65,7 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 unlink_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
+                SandboxCaptures::new(sandbox),
             ),
             js_string!("unlinkSync"),
             1,
@@ -87,9 +73,7 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 rename_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
+                SandboxCaptures::new(sandbox),
             ),
             js_string!("renameSync"),
             2,
@@ -97,25 +81,21 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
         .function(
             NativeFunction::from_copy_closure_with_captures(
                 copy_file_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
+                SandboxCaptures::new(sandbox),
             ),
             js_string!("copyFileSync"),
             2,
         )
         .function(
-            NativeFunction::from_copy_closure_with_captures(
-                rm_sync,
-                SandboxCaptures {
-                    sandbox: Arc::clone(&sandbox),
-                },
-            ),
+            NativeFunction::from_copy_closure_with_captures(rm_sync, SandboxCaptures::new(sandbox)),
             js_string!("rmSync"),
             1,
         )
         .function(
-            NativeFunction::from_copy_closure_with_captures(stat_sync, SandboxCaptures { sandbox }),
+            NativeFunction::from_copy_closure_with_captures(
+                stat_sync,
+                SandboxCaptures::new(sandbox),
+            ),
             js_string!("statSync"),
             1,
         )
@@ -123,7 +103,7 @@ pub(super) fn build_fs_object(ctx: &mut Context, sandbox: Arc<Sandbox>) -> boa_e
 }
 
 /// Registers the `fs` global object with Node-compatible synchronous file APIs.
-pub(super) fn register(ctx: &mut Context, sandbox: Arc<Sandbox>) {
+pub(super) fn register(ctx: &mut Context, sandbox: &Arc<Sandbox>) {
     let fs = build_fs_object(ctx, sandbox);
     ctx.register_global_property(
         js_string!("fs"),
@@ -138,10 +118,10 @@ pub(super) fn register(ctx: &mut Context, sandbox: Arc<Sandbox>) {
 // ---------------------------------------------------------------------------
 
 fn require_fs_root<'a>(
-    captures: &'a SandboxCaptures,
+    sandbox: &Sandbox,
     files: &'a std::sync::RwLockReadGuard<'a, crate::sandbox::FilesConfig>,
 ) -> JsResult<&'a cap_std::fs::Dir> {
-    if !captures.sandbox.fs_is_enabled() {
+    if !sandbox.fs_is_enabled() {
         return Err(JsNativeError::error()
             .with_message("file system access is not enabled")
             .into());
@@ -175,8 +155,9 @@ fn read_file_sync(
     _ctx: &mut Context,
 ) -> JsResult<JsValue> {
     let path = string_arg(args, 0, "path")?;
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     let content = root
         .read_to_string(&path)
@@ -197,8 +178,9 @@ fn write_file_sync(
 ) -> JsResult<JsValue> {
     let path = string_arg(args, 0, "path")?;
     let content = string_arg(args, 1, "data")?;
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     root.write(&path, content.as_bytes())
         .map_err(|e| JsNativeError::error().with_message(e.to_string()))?;
@@ -218,8 +200,9 @@ fn append_file_sync(
 ) -> JsResult<JsValue> {
     let path = string_arg(args, 0, "path")?;
     let data = string_arg(args, 1, "data")?;
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     let mut file = root
         .open_with(
@@ -245,8 +228,9 @@ fn exist_sync(
     _ctx: &mut Context,
 ) -> JsResult<JsValue> {
     let path = string_arg(args, 0, "path")?;
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     let exists = root.try_exists(&path).unwrap_or(false);
     Ok(JsValue::from(exists))
@@ -263,8 +247,9 @@ fn readdir_sync(
     ctx: &mut Context,
 ) -> JsResult<JsValue> {
     let path = string_arg(args, 0, "path")?;
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     let entries = root
         .read_dir(&path)
@@ -304,8 +289,9 @@ fn mkdir_sync(
         .and_then(|v| v.as_boolean())
         .unwrap_or(false);
 
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     if recursive {
         root.create_dir_all(&path)
@@ -328,8 +314,9 @@ fn stat_sync(
     ctx: &mut Context,
 ) -> JsResult<JsValue> {
     let path = string_arg(args, 0, "path")?;
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     let meta = root
         .metadata(&path)
@@ -377,8 +364,9 @@ fn unlink_sync(
     _ctx: &mut Context,
 ) -> JsResult<JsValue> {
     let path = string_arg(args, 0, "path")?;
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     root.remove_file(&path)
         .map_err(|e| JsNativeError::error().with_message(e.to_string()))?;
@@ -398,8 +386,9 @@ fn rename_sync(
 ) -> JsResult<JsValue> {
     let old_path = string_arg(args, 0, "oldPath")?;
     let new_path = string_arg(args, 1, "newPath")?;
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     root.rename(&old_path, root, &new_path)
         .map_err(|e| JsNativeError::error().with_message(e.to_string()))?;
@@ -419,8 +408,9 @@ fn copy_file_sync(
 ) -> JsResult<JsValue> {
     let src = string_arg(args, 0, "src")?;
     let dest = string_arg(args, 1, "dest")?;
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     root.copy(&src, root, &dest)
         .map_err(|e| JsNativeError::error().with_message(e.to_string()))?;
@@ -458,8 +448,9 @@ fn rm_sync(
         .and_then(|v| v.as_boolean())
         .unwrap_or(false);
 
-    let files = captures.sandbox.files.read().unwrap();
-    let root = require_fs_root(captures, &files)?;
+    let sandbox = captures.sandbox()?;
+    let files = sandbox.files.read().unwrap();
+    let root = require_fs_root(&sandbox, &files)?;
 
     let result = if recursive {
         root.remove_dir_all(&path)
@@ -488,12 +479,13 @@ mod tests {
     use super::super::JsContext;
     use crate::Sandbox;
 
-    fn setup() -> (JsContext, TempDir) {
+    // The sandbox must be returned: the context only holds weak references.
+    fn setup() -> (JsContext, Arc<Sandbox>, TempDir) {
         let dir = TempDir::new().unwrap();
         let sandbox = Arc::new(Sandbox::new());
         sandbox.enable_fs(dir.path()).unwrap();
-        let ctx = JsContext::new(sandbox);
-        (ctx, dir)
+        let ctx = JsContext::new(&sandbox);
+        (ctx, sandbox, dir)
     }
 
     fn eval(ctx: &mut JsContext, code: &str) -> String {
@@ -506,7 +498,7 @@ mod tests {
 
     #[test]
     fn read_file_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hello world")"#);
         assert_eq!(
             eval(&mut ctx, r#"fs.readFileSync("a.txt")"#),
@@ -537,7 +529,7 @@ mod tests {
 
     #[test]
     fn write_file_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         assert_eq!(
             eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#),
             "undefined"
@@ -548,7 +540,7 @@ mod tests {
 
     #[test]
     fn append_file_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("log.txt", "line1")"#);
         eval(&mut ctx, r#"fs.appendFileSync("log.txt", "\nline2")"#);
         assert_eq!(
@@ -564,7 +556,7 @@ mod tests {
 
     #[test]
     fn exist_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#);
         assert_eq!(eval(&mut ctx, r#"fs.existsSync("a.txt")"#), "true");
         assert_eq!(eval(&mut ctx, r#"fs.existsSync("nope.txt")"#), "false");
@@ -572,7 +564,7 @@ mod tests {
 
     #[test]
     fn readdir_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         assert_eq!(
             eval(&mut ctx, r#"Array.isArray(fs.readdirSync("."))"#),
             "true"
@@ -587,7 +579,7 @@ mod tests {
 
     #[test]
     fn mkdir_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         eval(&mut ctx, r#"fs.mkdirSync("subdir")"#);
         assert_eq!(eval(&mut ctx, r#"fs.existsSync("subdir")"#), "true");
         eval(&mut ctx, r#"fs.mkdirSync("a/b/c", { recursive: true })"#);
@@ -597,7 +589,7 @@ mod tests {
 
     #[test]
     fn stat_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#);
         assert_eq!(eval(&mut ctx, r#"fs.statSync("a.txt").size"#), "2");
         assert_eq!(eval(&mut ctx, r#"fs.statSync("a.txt").isFile()"#), "true");
@@ -620,7 +612,7 @@ mod tests {
 
     #[test]
     fn unlink_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#);
         assert_eq!(eval(&mut ctx, r#"fs.existsSync("a.txt")"#), "true");
         assert_eq!(eval(&mut ctx, r#"fs.unlinkSync("a.txt")"#), "undefined");
@@ -630,7 +622,7 @@ mod tests {
 
     #[test]
     fn rename_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("old.txt", "content")"#);
         assert_eq!(
             eval(&mut ctx, r#"fs.renameSync("old.txt", "new.txt")"#),
@@ -646,7 +638,7 @@ mod tests {
 
     #[test]
     fn copy_file_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         eval(&mut ctx, r#"fs.writeFileSync("src.txt", "hello")"#);
         assert_eq!(
             eval(&mut ctx, r#"fs.copyFileSync("src.txt", "dst.txt")"#),
@@ -667,7 +659,7 @@ mod tests {
 
     #[test]
     fn rm_sync() {
-        let (mut ctx, _dir) = setup();
+        let (mut ctx, _sandbox, _dir) = setup();
         // remove a file
         eval(&mut ctx, r#"fs.writeFileSync("a.txt", "hi")"#);
         eval(&mut ctx, r#"fs.rmSync("a.txt")"#);

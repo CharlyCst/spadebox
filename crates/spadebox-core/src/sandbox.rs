@@ -349,9 +349,11 @@ pub(crate) type JsFunc =
 /// Configuration and handle for the JavaScript tools.
 pub struct JsConfig {
     /// `None` until first use of the JavaScript REPL.
-    //
-    //  TODO: on drop we will need to signal the REPL thread to shut down, but this would require
-    //  support for interrupting Boa, which is not available yet.
+    ///
+    /// Dropping the `Sandbox` drops the sender inside, which wakes the idle
+    /// REPL task and terminates it. A REPL task mid-evaluation cannot be
+    /// interrupted (Boa does not support it); it shuts down after the
+    /// evaluation completes.
     repl_handle: RwLock<Option<JsReplHandle>>,
     /// Native functions registered via [`Sandbox::expose_js_func`].
     ///
@@ -391,24 +393,42 @@ impl JsConfig {
         }
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsEvalRequest>();
-        // The task runs until all senders are dropped; the dropped JoinHandle
-        // detaches it, and the pool thread is recycled once the loop exits.
+        // The task holds only a weak sandbox reference: a strong one would form
+        // a cycle (task → sandbox → JsConfig → tx) that keeps the channel open
+        // and the loop below running forever. The dropped JoinHandle detaches
+        // the task; the pool thread is recycled once the loop exits.
+        let sandbox = sandbox.as_weak();
         crate::runtime::handle().spawn_blocking(move || {
-            let mut ctx = crate::js_runtime::JsContext::new(&sandbox);
+            // Created on the first request; holds only weak sandbox references.
+            let mut ctx: Option<crate::js_runtime::JsContext> = None;
             let mut registered = 0usize;
             // `blocking_recv` parks this thread until a message arrives.
-            // Loop exits when all senders are dropped (i.e., when `JsConfig` is
-            // dropped), cleanly destroying the context.
+            // Loop exits when all senders are dropped (i.e., when the `Sandbox`
+            // is dropped), cleanly destroying the context.
             while let Some((code, reply)) = rx.blocking_recv() {
-                // Register any functions appended since the last evaluation, then eval.
-                // Always advance the cursor even on error to avoid retrying a broken entry.
+                // Hold a strong reference only while evaluating, releasing it
+                // before replying: once the caller observes the reply, this
+                // task no longer pins the sandbox.
                 let result = {
-                    let funcs = sandbox.js.funcs.read().unwrap();
-                    let reg = ctx.register_funcs(&funcs[registered..]);
-                    registered = funcs.len();
-                    reg
-                }
-                .and_then(|()| ctx.eval(&code));
+                    // The upgrade cannot fail while a request is in flight —
+                    // the requester holds a strong reference until it receives
+                    // the reply.
+                    let Some(sandbox) = sandbox.upgrade() else {
+                        break;
+                    };
+                    let ctx =
+                        ctx.get_or_insert_with(|| crate::js_runtime::JsContext::new(&sandbox));
+                    // Register any functions appended since the last evaluation,
+                    // then eval. Always advance the cursor even on error to
+                    // avoid retrying a broken entry.
+                    {
+                        let funcs = sandbox.js.funcs.read().unwrap();
+                        let reg = ctx.register_funcs(&funcs[registered..]);
+                        registered = funcs.len();
+                        reg
+                    }
+                    .and_then(|()| ctx.eval(&code))
+                };
                 let _ = reply.send(result);
             }
         });

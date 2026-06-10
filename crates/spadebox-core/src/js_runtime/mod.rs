@@ -1,7 +1,11 @@
-use std::{cell::RefCell, rc::Rc, sync::Arc};
+use std::{
+    cell::RefCell,
+    rc::Rc,
+    sync::{Arc, Weak},
+};
 
 use boa_engine::{
-    Context, JsNativeError, JsValue, Module, NativeFunction, Source,
+    Context, JsNativeError, JsResult, JsValue, Module, NativeFunction, Source,
     builtins::promise::PromiseState, js_string,
 };
 
@@ -34,12 +38,14 @@ pub struct JsContext {
     ctx: Context,
     console_output: Rc<RefCell<Vec<String>>>,
     loader: Rc<loader::SpadeboxModuleLoader>,
-    #[allow(dead_code)]
-    sandbox: Arc<Sandbox>,
 }
 
 impl JsContext {
     /// Creates a new `JsContext` with all runtime APIs registered.
+    ///
+    /// The context holds only weak references to the sandbox (see
+    /// [`SandboxCaptures`]); the caller is responsible for keeping the sandbox
+    /// alive while evaluating.
     pub fn new(sandbox: impl AsArc<Sandbox>) -> Self {
         let sandbox = sandbox.as_arc();
         let loader = Rc::new(loader::SpadeboxModuleLoader::new(&sandbox));
@@ -50,8 +56,8 @@ impl JsContext {
             .expect("failed to build JS context");
 
         // Inject runtime functions and objects
-        files::register(&mut ctx, Arc::clone(&sandbox));
-        fetch::register(&mut ctx, Arc::clone(&sandbox));
+        files::register(&mut ctx, &sandbox);
+        fetch::register(&mut ctx, &sandbox);
         loader::register_require(&mut ctx, Rc::clone(&loader));
         let console_output = console::register(&mut ctx);
 
@@ -59,7 +65,6 @@ impl JsContext {
             ctx,
             console_output,
             loader,
-            sandbox,
         }
     }
 
@@ -174,16 +179,40 @@ impl JsContext {
     }
 }
 
-/// Captures for native JS functions — wraps `Arc<Sandbox>` in a GC-traceable struct.
+/// Captures for native JS functions — wraps a weak sandbox reference in a
+/// GC-traceable struct.
 ///
-/// `Arc<Sandbox>` contains no GC-managed values, so all trace methods are no-ops.
+/// The reference is weak, not strong, to avoid a reference cycle: a `JsContext`
+/// can be owned by the long-lived REPL task, whose receiving channel is kept
+/// open by a sender stored inside the `Sandbox` itself. A strong reference here
+/// (task → context → sandbox → sender → task) would keep both the sandbox and
+/// the task alive forever after the host drops its last handle.
 struct SandboxCaptures {
-    sandbox: Arc<Sandbox>,
+    sandbox: Weak<Sandbox>,
+}
+
+impl SandboxCaptures {
+    fn new(sandbox: impl AsArc<Sandbox>) -> Self {
+        Self {
+            sandbox: sandbox.as_weak(),
+        }
+    }
+
+    /// Upgrades to a strong reference, or throws a JS error if the sandbox was
+    /// dropped. Every evaluation entry point holds a strong reference for its
+    /// duration, so the upgrade cannot fail while user code is running.
+    fn sandbox(&self) -> JsResult<Arc<Sandbox>> {
+        self.sandbox.upgrade().ok_or_else(|| {
+            JsNativeError::error()
+                .with_message("sandbox has been dropped")
+                .into()
+        })
+    }
 }
 
 impl boa_engine::gc::Finalize for SandboxCaptures {}
 
-// SAFETY: `Arc<Sandbox>` holds no GC-managed objects; nothing to trace.
+// SAFETY: `Weak<Sandbox>` holds no GC-managed objects; nothing to trace.
 unsafe impl boa_engine::gc::Trace for SandboxCaptures {
     boa_engine::gc::empty_trace!();
 }
@@ -213,13 +242,15 @@ mod tests {
     use crate::Sandbox;
     use std::sync::Arc;
 
-    fn ctx() -> JsContext {
-        JsContext::new(Arc::new(Sandbox::new()))
+    // The sandbox must be returned: the context only holds weak references.
+    fn ctx() -> (JsContext, Arc<Sandbox>) {
+        let sandbox = Arc::new(Sandbox::new());
+        (JsContext::new(&sandbox), sandbox)
     }
 
     #[test]
     fn register_func_callable_from_js() {
-        let mut ctx = ctx();
+        let (mut ctx, _sandbox) = ctx();
         ctx.register_func(
             "double",
             &["n".to_string()],
@@ -234,7 +265,7 @@ mod tests {
 
     #[test]
     fn register_func_error_becomes_js_error() {
-        let mut ctx = ctx();
+        let (mut ctx, _sandbox) = ctx();
         ctx.register_func(
             "fail",
             &[],
@@ -247,7 +278,7 @@ mod tests {
 
     #[test]
     fn jobs() {
-        let mut ctx = ctx();
+        let (mut ctx, _sandbox) = ctx();
 
         // Promise .then() callbacks are settled before eval() returns.
         ctx.eval("let x = 0; Promise.resolve(1).then(v => { x = v; });")
