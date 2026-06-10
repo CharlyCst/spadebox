@@ -38,6 +38,11 @@ impl Tool for JsExecTool {
             ));
         }
 
+        // Unlike the filesystem tools, this dispatch is required, not a
+        // performance choice: evaluation can run arbitrary JS for arbitrarily
+        // long, and draining the job queue blocks on the SpadeBox runtime —
+        // which would panic if this future were polled on an async executor
+        // thread.
         crate::runtime::handle()
             .spawn_blocking(move || {
                 let path = fs_utils::normalize_path(&params.path).to_string();

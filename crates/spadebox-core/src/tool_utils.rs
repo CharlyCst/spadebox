@@ -93,9 +93,6 @@ pub(crate) fn deserialize_bool_flexible<'de, D: serde::Deserializer<'de>>(
 ///
 /// New files (not yet on disk) are exempt — only call this when the file already
 /// exists (i.e. after a successful `root.metadata(path)`).
-///
-/// # Async safety
-/// Must be called from a `spawn_blocking` closure, never directly in async code.
 pub(crate) fn check_write_allowed(
     registry: &Registry,
     path: &str,
@@ -115,9 +112,6 @@ pub(crate) fn check_write_allowed(
 ///
 /// Must be called with the file still open so the mtime is read from the
 /// already-open file descriptor without a path lookup.
-///
-/// # Async safety
-/// Must be called from a `spawn_blocking` closure, never directly in async code.
 pub(crate) fn update_registry(registry: &mut Registry, path: &str, file: &File) -> ToolResult<()> {
     let mtime = file
         .metadata()
@@ -133,9 +127,6 @@ pub(crate) fn update_registry(registry: &mut Registry, path: &str, file: &File) 
 /// (read from `dst_dir`) so the caller can write to the destination immediately.
 /// If `src` had no entry, any stale `dst` entry is removed — the content at
 /// `dst` has changed and must be read before writing.
-///
-/// # Async safety
-/// Must be called from a `spawn_blocking` closure, never directly in async code.
 pub(crate) fn move_registry_entry(
     registry: &mut Registry,
     src: &str,

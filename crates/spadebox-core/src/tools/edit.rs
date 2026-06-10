@@ -1,4 +1,4 @@
-use std::io::{self, Read, Write};
+use std::io::{Read, Write};
 use std::sync::Arc;
 
 use schemars::JsonSchema;
@@ -36,15 +36,10 @@ impl Tool for EditFileTool {
          Always read the file before editing to ensure 'old_string' matches the current content exactly.";
 
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: EditParams) -> ToolResult<String> {
-        let sandbox = sandbox.as_arc();
-
-        // open(), read_to_end(), create(), and write_all() are all blocking
-        // syscalls. Run them on the SpadeBox runtime's blocking pool to avoid
-        // stalling the caller's executor.
-        crate::runtime::handle()
-            .spawn_blocking(move || do_edit(sandbox, params))
-            .await
-            .map_err(|e| ToolError::IoError(io::Error::other(e)))?
+        // The blocking syscalls (open, read_to_end, create, write_all) run
+        // inline: they are short enough that dispatching to a blocking pool
+        // costs more than it saves.
+        do_edit(sandbox.as_arc(), params)
     }
 }
 

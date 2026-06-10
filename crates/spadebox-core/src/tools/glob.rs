@@ -18,8 +18,6 @@
 //! output formatting — **never** passed to any function that opens a file
 //! descriptor. All fd resolution is handled exclusively by cap-std.
 
-use std::io;
-
 use cap_std::fs::Dir;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use schemars::JsonSchema;
@@ -170,36 +168,29 @@ impl Tool for GlobTool {
             params.max_results as usize
         };
 
-        // Directory walking is synchronous. Run on the SpadeBox runtime's
-        // blocking pool to avoid stalling the caller's executor.
-        let output = crate::runtime::handle()
-            .spawn_blocking(move || {
-                let fs_config = sandbox.files.read().unwrap();
-                let root = fs_config.root.as_ref().expect("Missing sandbox root");
-                let mut paths: Vec<String> = Vec::new();
+        // The directory walk runs inline; it is fast enough that dispatching
+        // to a blocking pool costs more than it saves.
+        let fs_config = sandbox.files.read().unwrap();
+        let root = fs_config.root.as_ref().expect("Missing sandbox root");
+        let mut paths: Vec<String> = Vec::new();
 
-                // The on_file callback only needs the display path — no file open required.
-                walk(root, "", &glob_set, &mut |_dir, _name, display_path| {
-                    paths.push(display_path.to_string());
-                    Ok(())
-                })?;
+        // The on_file callback only needs the display path — no file open required.
+        walk(root, "", &glob_set, &mut |_dir, _name, display_path| {
+            paths.push(display_path.to_string());
+            Ok(())
+        })?;
 
-                paths.sort();
-                let truncated = limit != usize::MAX && paths.len() > limit;
-                if truncated {
-                    paths.truncate(limit);
-                }
-                let mut output = format_output(&paths);
-                if truncated {
-                    output.push_str(&format!(
-                        "\n<warning>Output truncated: showing first {limit} results</warning>"
-                    ));
-                }
-                Ok::<String, ToolError>(output)
-            })
-            .await
-            .map_err(|e| ToolError::IoError(io::Error::other(e)))??;
-
+        paths.sort();
+        let truncated = limit != usize::MAX && paths.len() > limit;
+        if truncated {
+            paths.truncate(limit);
+        }
+        let mut output = format_output(&paths);
+        if truncated {
+            output.push_str(&format!(
+                "\n<warning>Output truncated: showing first {limit} results</warning>"
+            ));
+        }
         Ok(output)
     }
 }

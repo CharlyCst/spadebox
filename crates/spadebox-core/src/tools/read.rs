@@ -1,4 +1,4 @@
-use std::io::{self, Read};
+use std::io::Read;
 
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -32,56 +32,50 @@ impl Tool for ReadFileTool {
          Use `offset` (1-indexed) and `limit` to read a specific range of lines.";
 
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: ReadParams) -> ToolResult<String> {
+        // The blocking syscalls (open, read_to_end) run inline: they are short
+        // enough that dispatching to a blocking pool costs more than it saves.
         let sandbox = sandbox.as_arc();
+        let path = fs_utils::normalize_path(&params.path).to_string();
 
-        // open() and read_to_end() are both blocking syscalls. Run them on the
-        // SpadeBox runtime's blocking pool to avoid stalling the caller's executor.
-        crate::runtime::handle()
-            .spawn_blocking(move || {
-                let path = fs_utils::normalize_path(&params.path).to_string();
+        // SANDBOX: fd-relative open enforced by cap-std / RESOLVE_BENEATH.
+        // Use a read lock just for open() — the returned File is an owned fd
+        // that remains valid after the lock is dropped.
+        let mut file = {
+            let fs_config = sandbox.files.read().unwrap();
+            fs_config
+                .root
+                .as_ref()
+                .expect("Missing sandbox root")
+                .open(&path)
+                .map_err(|e| map_io_err(&path, e))?
+        };
 
-                // SANDBOX: fd-relative open enforced by cap-std / RESOLVE_BENEATH.
-                // Use a read lock just for open() — the returned File is an owned fd
-                // that remains valid after the lock is dropped.
-                let mut file = {
-                    let fs_config = sandbox.files.read().unwrap();
-                    fs_config
-                        .root
-                        .as_ref()
-                        .expect("Missing sandbox root")
-                        .open(&path)
-                        .map_err(|e| map_io_err(&path, e))?
-                };
+        // `cap_std::fs::File` implements `std::io::Read` by calling the
+        // `read` syscall on the already-open file descriptor. No path
+        // resolution occurs here — the sandbox guarantee was established
+        // at `open()` time above.
+        let mut buf = Vec::new();
+        file.read_to_end(&mut buf).map_err(ToolError::IoError)?;
 
-                // `cap_std::fs::File` implements `std::io::Read` by calling the
-                // `read` syscall on the already-open file descriptor. No path
-                // resolution occurs here — the sandbox guarantee was established
-                // at `open()` time above.
-                let mut buf = Vec::new();
-                file.read_to_end(&mut buf).map_err(ToolError::IoError)?;
+        // Record the mtime so write/edit tools can detect external modifications.
+        // Always recorded against the full file regardless of offset/limit.
+        let mtime = file
+            .metadata()
+            .and_then(|m| m.modified())
+            .map_err(ToolError::IoError)?;
+        sandbox
+            .files
+            .write()
+            .unwrap()
+            .read_registry
+            .insert(path.clone(), mtime);
 
-                // Record the mtime so write/edit tools can detect external modifications.
-                // Always recorded against the full file regardless of offset/limit.
-                let mtime = file
-                    .metadata()
-                    .and_then(|m| m.modified())
-                    .map_err(ToolError::IoError)?;
-                sandbox
-                    .files
-                    .write()
-                    .unwrap()
-                    .read_registry
-                    .insert(path.clone(), mtime);
-
-                let content = String::from_utf8_lossy(&buf).into_owned();
-                let windowed = apply_window(content, params.offset, params.limit);
-                Ok(truncate_bytes(
-                    windowed,
-                    params.max_bytes.unwrap_or(DEFAULT_MAX_BYTES),
-                ))
-            })
-            .await
-            .map_err(|e| ToolError::IoError(io::Error::other(e)))?
+        let content = String::from_utf8_lossy(&buf).into_owned();
+        let windowed = apply_window(content, params.offset, params.limit);
+        Ok(truncate_bytes(
+            windowed,
+            params.max_bytes.unwrap_or(DEFAULT_MAX_BYTES),
+        ))
     }
 }
 

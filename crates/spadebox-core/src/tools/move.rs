@@ -45,12 +45,7 @@ impl Tool for MoveTool {
         To delete instead of moving, omit 'dst' and set 'delete' to true.";
 
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: MoveParams) -> ToolResult<String> {
-        let sandbox = sandbox.as_arc();
-
-        crate::runtime::handle()
-            .spawn_blocking(move || do_move(sandbox, params))
-            .await
-            .map_err(|e| ToolError::IoError(io::Error::other(e)))?
+        do_move(sandbox.as_arc(), params)
     }
 }
 

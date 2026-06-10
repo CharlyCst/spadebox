@@ -1,4 +1,4 @@
-use std::io::{self, Write};
+use std::io::Write;
 use std::sync::Arc;
 
 use schemars::JsonSchema;
@@ -40,21 +40,13 @@ impl Tool for WriteFileTool {
         and set 'create_dirs' to true — content is ignored in that case.";
 
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: WriteParams) -> ToolResult<String> {
-        let sandbox = sandbox.as_arc();
-
-        // All filesystem operations (create_dir_all, create, write_all) are
-        // blocking syscalls. Run them on the SpadeBox runtime's blocking pool
-        // to avoid stalling the caller's executor.
-        crate::runtime::handle()
-            .spawn_blocking(move || do_write(sandbox, params))
-            .await
-            .map_err(|e| ToolError::IoError(io::Error::other(e)))?
+        // The blocking syscalls (create_dir_all, create, write_all) run inline:
+        // they are short enough that dispatching to a blocking pool costs more
+        // than it saves.
+        do_write(sandbox.as_arc(), params)
     }
 }
 
-/// Performs the actual filesystem work on a blocking thread.
-///
-/// Separated from `run` to keep the blocking logic readable outside the async context.
 fn do_write(sandbox: Arc<Sandbox>, mut params: WriteParams) -> ToolResult<String> {
     params.path = fs_utils::normalize_path(&params.path).to_string();
     let mut fs_config = sandbox.files.write().unwrap();
