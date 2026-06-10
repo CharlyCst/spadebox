@@ -383,16 +383,13 @@ impl SpadeBox {
             }
             Ok(promise) => {
               // The Promise resolves via JS microtasks on the event loop thread.
-              // We spawn a dedicated OS thread with its own tokio runtime so the
-              // event loop can continue running (processing the .then() callback)
-              // while Boa blocks on rx.recv() waiting for the result.
+              // We spawn a dedicated OS thread blocking on the SpadeBox runtime
+              // so the event loop can continue running (processing the .then()
+              // callback) while Boa blocks on rx.recv() waiting for the result.
               std::thread::spawn(move || {
-                let rt = tokio::runtime::Builder::new_current_thread()
-                  .build()
-                  .expect("tokio runtime for Promise resolution");
                 // undefined/null resolve to None; treat both as JSON null.
                 let _ = tx.send(
-                  rt.block_on(promise)
+                  spadebox_core::runtime::block_on(promise)
                     .map_err(|e| e.to_string())
                     .map(|opt| opt.unwrap_or(serde_json::Value::Null)),
                 );

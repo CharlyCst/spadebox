@@ -170,34 +170,35 @@ impl Tool for GlobTool {
             params.max_results as usize
         };
 
-        // Directory walking is synchronous. Run on a dedicated blocking thread
-        // to avoid stalling the async executor.
-        let output = tokio::task::spawn_blocking(move || {
-            let fs_config = sandbox.files.read().unwrap();
-            let root = fs_config.root.as_ref().expect("Missing sandbox root");
-            let mut paths: Vec<String> = Vec::new();
+        // Directory walking is synchronous. Run on the SpadeBox runtime's
+        // blocking pool to avoid stalling the caller's executor.
+        let output = crate::runtime::handle()
+            .spawn_blocking(move || {
+                let fs_config = sandbox.files.read().unwrap();
+                let root = fs_config.root.as_ref().expect("Missing sandbox root");
+                let mut paths: Vec<String> = Vec::new();
 
-            // The on_file callback only needs the display path — no file open required.
-            walk(root, "", &glob_set, &mut |_dir, _name, display_path| {
-                paths.push(display_path.to_string());
-                Ok(())
-            })?;
+                // The on_file callback only needs the display path — no file open required.
+                walk(root, "", &glob_set, &mut |_dir, _name, display_path| {
+                    paths.push(display_path.to_string());
+                    Ok(())
+                })?;
 
-            paths.sort();
-            let truncated = limit != usize::MAX && paths.len() > limit;
-            if truncated {
-                paths.truncate(limit);
-            }
-            let mut output = format_output(&paths);
-            if truncated {
-                output.push_str(&format!(
-                    "\n<warning>Output truncated: showing first {limit} results</warning>"
-                ));
-            }
-            Ok::<String, ToolError>(output)
-        })
-        .await
-        .map_err(|e| ToolError::IoError(io::Error::other(e)))??;
+                paths.sort();
+                let truncated = limit != usize::MAX && paths.len() > limit;
+                if truncated {
+                    paths.truncate(limit);
+                }
+                let mut output = format_output(&paths);
+                if truncated {
+                    output.push_str(&format!(
+                        "\n<warning>Output truncated: showing first {limit} results</warning>"
+                    ));
+                }
+                Ok::<String, ToolError>(output)
+            })
+            .await
+            .map_err(|e| ToolError::IoError(io::Error::other(e)))??;
 
         Ok(output)
     }

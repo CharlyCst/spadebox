@@ -43,9 +43,10 @@ impl Tool for WriteFileTool {
         let sandbox = sandbox.as_arc();
 
         // All filesystem operations (create_dir_all, create, write_all) are
-        // blocking syscalls. Run them on a dedicated thread to avoid stalling
-        // the async executor.
-        tokio::task::spawn_blocking(move || do_write(sandbox, params))
+        // blocking syscalls. Run them on the SpadeBox runtime's blocking pool
+        // to avoid stalling the caller's executor.
+        crate::runtime::handle()
+            .spawn_blocking(move || do_write(sandbox, params))
             .await
             .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }

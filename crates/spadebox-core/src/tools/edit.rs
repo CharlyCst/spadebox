@@ -39,8 +39,10 @@ impl Tool for EditFileTool {
         let sandbox = sandbox.as_arc();
 
         // open(), read_to_end(), create(), and write_all() are all blocking
-        // syscalls. Run them on a dedicated thread to avoid stalling the executor.
-        tokio::task::spawn_blocking(move || do_edit(sandbox, params))
+        // syscalls. Run them on the SpadeBox runtime's blocking pool to avoid
+        // stalling the caller's executor.
+        crate::runtime::handle()
+            .spawn_blocking(move || do_edit(sandbox, params))
             .await
             .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }

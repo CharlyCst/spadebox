@@ -47,7 +47,8 @@ impl Tool for MoveTool {
     async fn run(sandbox: impl AsArc<Sandbox> + Send, params: MoveParams) -> ToolResult<String> {
         let sandbox = sandbox.as_arc();
 
-        tokio::task::spawn_blocking(move || do_move(sandbox, params))
+        crate::runtime::handle()
+            .spawn_blocking(move || do_move(sandbox, params))
             .await
             .map_err(|e| ToolError::IoError(io::Error::other(e)))?
     }

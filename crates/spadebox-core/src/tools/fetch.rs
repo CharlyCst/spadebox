@@ -11,6 +11,7 @@
 //! - URL scheme must be `http` or `https`; all other schemes are rejected.
 
 use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use reqwest::Client;
 use schemars::JsonSchema;
@@ -72,49 +73,68 @@ impl Tool for FetchTool {
             params.headers.unwrap_or_default(),
         );
 
-        // Build and send the request.
-        let client = Client::builder()
-            .user_agent(user_agent)
-            .build()
-            .map_err(|e| ToolError::HttpError(e.to_string()))?;
         let method = reqwest::Method::from_bytes(method_upper.as_bytes())
             .map_err(|e| ToolError::InvalidUrl(format!("invalid method: {}", e)))?;
 
-        let mut req = client.request(method, url);
-        if let Some(body) = body {
-            req = req.body(body);
-        }
-        for (key, value) in headers {
-            req = req.header(&key, &value);
-        }
+        // Run the request on the SpadeBox runtime: reqwest's connection tasks
+        // must live on a tokio runtime, and spawning keeps the tool usable from
+        // hosts without one.
+        crate::runtime::handle()
+            .spawn(async move {
+                let mut req = http_client()
+                    .request(method, url)
+                    .header(reqwest::header::USER_AGENT, &user_agent);
+                if let Some(body) = body {
+                    req = req.body(body);
+                }
+                for (key, value) in headers {
+                    req = req.header(&key, &value);
+                }
 
-        let response = req
-            .send()
+                let response = req
+                    .send()
+                    .await
+                    .map_err(|e| ToolError::HttpError(e.to_string()))?;
+
+                let status = response.status();
+                let content_type = parse_content_type(&response);
+                let body = response
+                    .text()
+                    .await
+                    .map_err(|e| ToolError::HttpError(e.to_string()))?;
+
+                if body.is_empty() {
+                    return Ok(format!("HTTP {}", status.as_u16()));
+                }
+
+                let result = if params.raw {
+                    body
+                } else {
+                    process_body(content_type.as_deref(), &body)?
+                };
+
+                Ok(truncate_bytes(
+                    result,
+                    params.max_bytes.unwrap_or(DEFAULT_MAX_BYTES),
+                ))
+            })
             .await
-            .map_err(|e| ToolError::HttpError(e.to_string()))?;
-
-        let status = response.status();
-        let content_type = parse_content_type(&response);
-        let body = response
-            .text()
-            .await
-            .map_err(|e| ToolError::HttpError(e.to_string()))?;
-
-        if body.is_empty() {
-            return Ok(format!("HTTP {}", status.as_u16()));
-        }
-
-        let result = if params.raw {
-            body
-        } else {
-            process_body(content_type.as_deref(), &body)?
-        };
-
-        Ok(truncate_bytes(
-            result,
-            params.max_bytes.unwrap_or(DEFAULT_MAX_BYTES),
-        ))
+            .map_err(|e| ToolError::HttpError(e.to_string()))?
     }
+}
+
+/// Returns the shared HTTP client, building it on first use.
+///
+/// A single client is shared across all sandboxes and tools so that connection
+/// pools are reused. The `User-Agent` is set per request since it is part of
+/// the per-sandbox configuration.
+pub(crate) fn http_client() -> &'static Client {
+    static CLIENT: OnceLock<Client> = OnceLock::new();
+    CLIENT.get_or_init(|| {
+        Client::builder()
+            .build()
+            .expect("failed to build the HTTP client")
+    })
 }
 
 // ---------------------------------------------------------------------------

@@ -324,19 +324,22 @@ type JsEvalRequest = (
 ///
 /// # Why a dedicated thread?
 ///
-/// Boa's `JsContext` is `!Send`: it cannot be moved across threads. We spawn a
-/// dedicated OS thread that owns the `JsContext` for its entire lifetime and
-/// processes evaluation requests through a channel. This keeps `JsConfig` —
-/// and therefore `Sandbox` — `Send + Sync`, while naturally preserving JS session
-/// state (variables, loaded modules, …) across tool calls.
+/// Boa's `JsContext` is `!Send`: it cannot be moved across threads. We dedicate
+/// a thread from the SpadeBox runtime's blocking pool that owns the `JsContext`
+/// for its entire lifetime and processes evaluation requests through a channel.
+/// This keeps `JsConfig` — and therefore `Sandbox` — `Send + Sync`, while
+/// naturally preserving JS session state (variables, loaded modules, …) across
+/// tool calls.
+///
+/// Using the blocking pool (rather than `std::thread::spawn`) lets threads be
+/// reused across short-lived sandboxes. Each live REPL session pins one pool
+/// thread (tokio's default cap is 512), released when the `JsConfig` is dropped.
 ///
 /// [`tokio::sync::mpsc::UnboundedSender`] is used instead of
 /// `std::sync::mpsc::Sender` because only the former is `Send + Sync`, which is
 /// required for `Sandbox` to be `Sync`.
 struct JsReplHandle {
     tx: tokio::sync::mpsc::UnboundedSender<JsEvalRequest>,
-    /// Kept alive so the thread is joined on drop rather than detached.
-    _thread: std::thread::JoinHandle<()>,
 }
 
 /// A native function stored in [`JsConfig::funcs`] and shared with JS contexts.
@@ -388,7 +391,9 @@ impl JsConfig {
         }
 
         let (tx, mut rx) = tokio::sync::mpsc::unbounded_channel::<JsEvalRequest>();
-        let thread = std::thread::spawn(move || {
+        // The task runs until all senders are dropped; the dropped JoinHandle
+        // detaches it, and the pool thread is recycled once the loop exits.
+        crate::runtime::handle().spawn_blocking(move || {
             let mut ctx = crate::js_runtime::JsContext::new(&sandbox);
             let mut registered = 0usize;
             // `blocking_recv` parks this thread until a message arrives.
@@ -407,10 +412,7 @@ impl JsConfig {
                 let _ = reply.send(result);
             }
         });
-        *handle = Some(JsReplHandle {
-            tx,
-            _thread: thread,
-        });
+        *handle = Some(JsReplHandle { tx });
     }
 
     /// Sends `code` to the JS context thread and awaits the result.

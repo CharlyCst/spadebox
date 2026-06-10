@@ -13,7 +13,6 @@ napi = { version = "3", features = ["tokio_rt", "serde-json"] }
 napi-derive = "3"
 serde_json = { workspace = true }
 spadebox-core = { path = "../crates/spadebox-core" }
-tokio = { workspace = true }
 
 [build-dependencies]
 napi-build = "2"

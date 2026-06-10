@@ -97,39 +97,40 @@ impl Tool for GrepTool {
         };
 
         // Directory walking and grep-searcher are both synchronous. Run them on
-        // a dedicated blocking thread to avoid stalling the async executor.
-        let output = tokio::task::spawn_blocking(move || {
-            let mut lines: Vec<String> = Vec::new();
-            let mut match_count: usize = 0;
-            let fs_config = sandbox.files.read().unwrap();
-            let root = fs_config.root.as_ref().expect("Missing sandbox root");
-            walk(root, "", &glob_set, &mut |dir, name, display_path| {
-                if match_count >= limit {
-                    return Ok(());
+        // the SpadeBox runtime's blocking pool to avoid stalling the caller's executor.
+        let output = crate::runtime::handle()
+            .spawn_blocking(move || {
+                let mut lines: Vec<String> = Vec::new();
+                let mut match_count: usize = 0;
+                let fs_config = sandbox.files.read().unwrap();
+                let root = fs_config.root.as_ref().expect("Missing sandbox root");
+                walk(root, "", &glob_set, &mut |dir, name, display_path| {
+                    if match_count >= limit {
+                        return Ok(());
+                    }
+                    let remaining = limit - match_count;
+                    let found = search_file(
+                        dir,
+                        name,
+                        display_path,
+                        &matcher,
+                        context_lines,
+                        remaining,
+                        &mut lines,
+                    )?;
+                    match_count += found;
+                    Ok(())
+                })?;
+                let mut output = format_output(&lines);
+                if match_count >= limit && limit != usize::MAX {
+                    output.push_str(&format!(
+                        "\n<warning>Output truncated: showing first {limit} matches</warning>"
+                    ));
                 }
-                let remaining = limit - match_count;
-                let found = search_file(
-                    dir,
-                    name,
-                    display_path,
-                    &matcher,
-                    context_lines,
-                    remaining,
-                    &mut lines,
-                )?;
-                match_count += found;
-                Ok(())
-            })?;
-            let mut output = format_output(&lines);
-            if match_count >= limit && limit != usize::MAX {
-                output.push_str(&format!(
-                    "\n<warning>Output truncated: showing first {limit} matches</warning>"
-                ));
-            }
-            Ok::<String, ToolError>(output)
-        })
-        .await
-        .map_err(|e| ToolError::IoError(io::Error::other(e)))??;
+                Ok::<String, ToolError>(output)
+            })
+            .await
+            .map_err(|e| ToolError::IoError(io::Error::other(e)))??;
 
         Ok(output)
     }

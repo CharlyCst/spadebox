@@ -1,5 +1,6 @@
 mod error;
 mod js_runtime;
+pub mod runtime;
 mod sandbox;
 mod tool_utils;
 pub mod tools;

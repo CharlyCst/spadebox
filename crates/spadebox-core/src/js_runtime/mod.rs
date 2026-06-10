@@ -8,6 +8,7 @@ use boa_engine::{
 use crate::{AsArc, Sandbox, ToolError, ToolResult};
 
 mod console;
+mod executor;
 mod fetch;
 mod files;
 mod loader;
@@ -44,6 +45,7 @@ impl JsContext {
         let loader = Rc::new(loader::SpadeboxModuleLoader::new(&sandbox));
         let mut ctx = Context::builder()
             .module_loader(Rc::clone(&loader))
+            .job_executor(Rc::new(executor::SpadeboxJobExecutor::new()))
             .build()
             .expect("failed to build JS context");
 

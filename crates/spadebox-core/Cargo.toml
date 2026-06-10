@@ -15,6 +15,9 @@ serde = { workspace = true }
 serde_json = { workspace = true }
 schemars = { workspace = true }
 boa_engine = "0.21"
+# Same crates boa_engine uses internally; needed to drive boa's async jobs in our job executor
+futures-concurrency = "7.6"
+futures-lite = "2.6"
 grep-regex = "0.1"
 grep-searcher = "0.1"
 globset = "0.4"

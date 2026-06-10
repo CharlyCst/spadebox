@@ -3,15 +3,14 @@ use std::sync::Arc;
 
 use boa_engine::{
     Context, JsNativeError, JsResult, JsValue, NativeFunction,
-    job::{Job, PromiseJob},
+    job::NativeAsyncJob,
     js_string,
     object::{ObjectInitializer, builtins::JsPromise},
     property::{Attribute, PropertyKey},
 };
-use reqwest::Client;
 
 use crate::sandbox::substitute_credentials;
-use crate::tools::fetch::validate_request;
+use crate::tools::fetch::{http_client, validate_request};
 use crate::{Sandbox, ToolError};
 
 use super::SandboxCaptures;
@@ -100,76 +99,75 @@ fn fetch_fn(
 
     let (url, body, headers) = substitute_credentials(&sandbox, validated_url, body, headers);
 
-    // --- Create pending promise, enqueue HTTP job ---
+    // --- Start the request, create a pending promise, enqueue an async job ---
+
+    // Spawning on the SpadeBox runtime starts the request immediately on the
+    // runtime's worker threads: multiple in-flight fetches run concurrently,
+    // and progress even while the engine thread is evaluating code.
+    let request =
+        crate::runtime::handle().spawn(do_request(url, method_str, body, user_agent, headers));
+
     let (promise, resolvers) = JsPromise::new_pending(ctx);
     let resolve = resolvers.resolve;
     let reject = resolvers.reject;
 
-    ctx.enqueue_job(Job::PromiseJob(PromiseJob::new(move |ctx| {
-        match do_request(url, &method_str, body.as_deref(), &user_agent, &headers) {
-            Ok((status, body_text)) => {
-                let response = build_response(status, body_text, ctx);
-                resolve.call(&JsValue::undefined(), &[JsValue::from(response)], ctx)?;
-            }
-            Err(e) => {
-                let err = JsNativeError::error()
-                    .with_message(format!("fetch: {e}"))
-                    .to_opaque(ctx);
-                reject.call(&JsValue::undefined(), &[JsValue::from(err)], ctx)?;
-            }
-        }
-        Ok(JsValue::undefined())
-    })));
+    ctx.enqueue_job(
+        NativeAsyncJob::with_realm(
+            async move |ctx: &std::cell::RefCell<&mut Context>| {
+                let result = match request.await {
+                    Ok(result) => result,
+                    Err(join_err) => Err(join_err.to_string()),
+                };
+                let ctx = &mut ctx.borrow_mut();
+                match result {
+                    Ok((status, body_text)) => {
+                        let response = build_response(status, body_text, ctx);
+                        resolve.call(&JsValue::undefined(), &[JsValue::from(response)], ctx)?;
+                    }
+                    Err(e) => {
+                        let err = JsNativeError::error()
+                            .with_message(format!("fetch: {e}"))
+                            .to_opaque(ctx);
+                        reject.call(&JsValue::undefined(), &[JsValue::from(err)], ctx)?;
+                    }
+                }
+                Ok(JsValue::undefined())
+            },
+            ctx.realm().clone(),
+        )
+        .into(),
+    );
 
     Ok(JsValue::from(promise))
 }
 
 // ---------------------------------------------------------------------------
-// HTTP execution — sync wrapper around async reqwest
+// HTTP execution
 // ---------------------------------------------------------------------------
 
-fn do_request(
+/// Performs the HTTP request. Must run on the SpadeBox runtime.
+async fn do_request(
     url: reqwest::Url,
-    method: &str,
-    body: Option<&str>,
-    user_agent: &str,
-    headers: &HashMap<String, String>,
+    method: String,
+    body: Option<String>,
+    user_agent: String,
+    headers: HashMap<String, String>,
 ) -> Result<(u16, String), String> {
-    let method = method.to_owned();
-    let body = body.map(str::to_owned);
-    let user_agent = user_agent.to_owned();
-    let headers = headers.clone();
-
-    let fut = async move {
-        let client = Client::builder()
-            .user_agent(user_agent)
-            .build()
-            .map_err(|e| e.to_string())?;
-        let method_parsed =
-            reqwest::Method::from_bytes(method.as_bytes()).map_err(|e| e.to_string())?;
-        let mut req = client.request(method_parsed, url);
-        if let Some(b) = body {
-            req = req.body(b);
-        }
-        for (key, value) in &headers {
-            req = req.header(key.as_str(), value.as_str());
-        }
-        let resp = req.send().await.map_err(|e| e.to_string())?;
-        let status = resp.status().as_u16();
-        let text = resp.text().await.map_err(|e| e.to_string())?;
-        Ok((status, text))
-    };
-
-    // Always create a fresh runtime. Using Handle::block_on on a borrowed handle
-    // deadlocks inside current_thread runtimes (e.g. #[tokio::test]), because
-    // block_on needs to drive the scheduler but the owning thread is waiting on
-    // spawn_blocking. A new runtime is safe from a spawn_blocking thread and
-    // panics loudly if eval() is ever (incorrectly) called from an async task.
-    tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(|e| e.to_string())?
-        .block_on(fut)
+    let method_parsed =
+        reqwest::Method::from_bytes(method.as_bytes()).map_err(|e| e.to_string())?;
+    let mut req = http_client()
+        .request(method_parsed, url)
+        .header(reqwest::header::USER_AGENT, &user_agent);
+    if let Some(b) = body {
+        req = req.body(b);
+    }
+    for (key, value) in &headers {
+        req = req.header(key.as_str(), value.as_str());
+    }
+    let resp = req.send().await.map_err(|e| e.to_string())?;
+    let status = resp.status().as_u16();
+    let text = resp.text().await.map_err(|e| e.to_string())?;
+    Ok((status, text))
 }
 
 // ---------------------------------------------------------------------------
@@ -299,5 +297,42 @@ mod tests {
                 .is_err(),
             "should throw for disallowed verb"
         );
+    }
+
+    /// End-to-end check of the async fetch plumbing: requests are spawned on
+    /// the SpadeBox runtime, the promise resolves through the job executor,
+    /// and concurrent fetches both complete within a single eval.
+    #[test]
+    fn fetch_resolves_through_async_executor() {
+        use std::io::{Read, Write};
+
+        // Minimal HTTP server answering two requests with "hello".
+        let listener = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+        let addr = listener.local_addr().unwrap();
+        let server = std::thread::spawn(move || {
+            for _ in 0..2 {
+                let (mut stream, _) = listener.accept().unwrap();
+                let mut buf = [0u8; 1024];
+                let _ = stream.read(&mut buf);
+                stream
+                    .write_all(
+                        b"HTTP/1.1 200 OK\r\ncontent-length: 5\r\nconnection: close\r\n\r\nhello",
+                    )
+                    .unwrap();
+            }
+        });
+
+        let mut ctx = JsContext::new(sandbox_with_http());
+        ctx.eval(&format!(
+            r#"
+            let a, b;
+            fetch("http://{addr}/").then(r => r.text()).then(t => {{ a = t; }});
+            fetch("http://{addr}/").then(r => r.text()).then(t => {{ b = t; }});
+            "#
+        ))
+        .unwrap();
+        // eval drains the job queue, so both promises have settled by now.
+        assert_eq!(ctx.eval("a + b").unwrap().value, "\"hellohello\"");
+        server.join().unwrap();
     }
 }

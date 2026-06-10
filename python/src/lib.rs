@@ -15,7 +15,6 @@ use spadebox_core::{
 };
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::runtime::Runtime;
 
 fn to_py_err(e: spadebox_core::ToolError) -> PyErr {
     PyRuntimeError::new_err(e.to_string())
@@ -80,7 +79,6 @@ impl SbToolResult {
 #[pyclass]
 pub struct SpadeBox {
     inner: Arc<Sandbox>,
-    runtime: Arc<Runtime>,
 }
 
 #[pymethods]
@@ -89,14 +87,13 @@ impl SpadeBox {
     ///
     /// Call `enable_files` to enable filesystem tools and `enable_http` to
     /// enable HTTP fetching.
+    // `Default` is not meaningful for a PyO3 class exposed to Python.
+    #[allow(clippy::new_without_default)]
     #[new]
-    pub fn new() -> PyResult<Self> {
-        let runtime = Runtime::new()
-            .map_err(|e| PyRuntimeError::new_err(format!("failed to create tokio runtime: {e}")))?;
-        Ok(Self {
+    pub fn new() -> Self {
+        Self {
             inner: Arc::new(Sandbox::new()),
-            runtime: Arc::new(runtime),
-        })
+        }
     }
 
     /// Enable filesystem tools with `path` as the sandbox root.
@@ -212,9 +209,8 @@ impl SpadeBox {
         params_json: String,
     ) -> PyResult<SbToolResult> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 match spadebox_core::call_tool(&inner, &name, params_json).await {
                     Err(protocol_err) => Err(PyValueError::new_err(protocol_err)),
                     Ok(Ok(output)) => Ok(SbToolResult {
@@ -248,9 +244,8 @@ impl SpadeBox {
         max_bytes: Option<u64>,
     ) -> PyResult<String> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 ReadFileTool::run(
                     &inner,
                     ReadParams {
@@ -284,9 +279,8 @@ impl SpadeBox {
         create_dirs: Option<bool>,
     ) -> PyResult<String> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 WriteFileTool::run(
                     &inner,
                     WriteParams {
@@ -320,9 +314,8 @@ impl SpadeBox {
         replace_all: Option<bool>,
     ) -> PyResult<String> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 EditFileTool::run(
                     &inner,
                     EditParams {
@@ -358,9 +351,8 @@ impl SpadeBox {
         create_dirs: Option<bool>,
     ) -> PyResult<String> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 MoveTool::run(
                     &inner,
                     MoveParams {
@@ -384,9 +376,8 @@ impl SpadeBox {
     /// (e.g. ``"**/*.rs"`` finds all Rust files).
     pub fn glob(&self, py: Python<'_>, pattern: String) -> PyResult<String> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 GlobTool::run(
                     &inner,
                     GlobParams {
@@ -415,9 +406,8 @@ impl SpadeBox {
         context_lines: Option<u32>,
     ) -> PyResult<String> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 GrepTool::run(
                     &inner,
                     GrepParams {
@@ -457,9 +447,8 @@ impl SpadeBox {
         max_bytes: Option<u64>,
     ) -> PyResult<String> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 FetchTool::run(
                     &inner,
                     FetchParams {
@@ -543,9 +532,8 @@ impl SpadeBox {
     /// called first.
     pub fn js_repl(&self, py: Python<'_>, code: String) -> PyResult<String> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 JsReplTool::run(&inner, JsReplParams { code })
                     .await
                     .map_err(to_py_err)
@@ -562,9 +550,8 @@ impl SpadeBox {
     /// script throws.
     pub fn js_exec(&self, py: Python<'_>, path: String) -> PyResult<String> {
         let inner = Arc::clone(&self.inner);
-        let runtime = Arc::clone(&self.runtime);
         py.detach(|| {
-            runtime.block_on(async move {
+            spadebox_core::runtime::block_on(async move {
                 JsExecTool::run(&inner, JsExecParams { path })
                     .await
                     .map_err(to_py_err)

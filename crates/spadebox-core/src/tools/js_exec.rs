@@ -38,29 +38,30 @@ impl Tool for JsExecTool {
             ));
         }
 
-        tokio::task::spawn_blocking(move || {
-            let path = fs_utils::normalize_path(&params.path).to_string();
-            let mut file = {
-                let fs_config = sandbox.files.read().unwrap();
-                fs_config
-                    .root
-                    .as_ref()
-                    .expect("Missing sandbox root")
-                    .open(&path)
-                    .map_err(|e| map_io_err(&path, e))?
-            };
-            let mut code = String::new();
-            file.read_to_string(&mut code).map_err(ToolError::IoError)?;
+        crate::runtime::handle()
+            .spawn_blocking(move || {
+                let path = fs_utils::normalize_path(&params.path).to_string();
+                let mut file = {
+                    let fs_config = sandbox.files.read().unwrap();
+                    fs_config
+                        .root
+                        .as_ref()
+                        .expect("Missing sandbox root")
+                        .open(&path)
+                        .map_err(|e| map_io_err(&path, e))?
+                };
+                let mut code = String::new();
+                file.read_to_string(&mut code).map_err(ToolError::IoError)?;
 
-            let mut ctx = JsContext::new(&sandbox);
-            let funcs = sandbox.js.funcs.read().unwrap();
-            ctx.register_funcs(&funcs)?;
-            drop(funcs);
-            ctx.eval_module(&code, Path::new(&path))
-                .map(|output| output.console.join("\n"))
-        })
-        .await
-        .map_err(|e| ToolError::JsError(e.to_string()))?
+                let mut ctx = JsContext::new(&sandbox);
+                let funcs = sandbox.js.funcs.read().unwrap();
+                ctx.register_funcs(&funcs)?;
+                drop(funcs);
+                ctx.eval_module(&code, Path::new(&path))
+                    .map(|output| output.console.join("\n"))
+            })
+            .await
+            .map_err(|e| ToolError::JsError(e.to_string()))?
     }
 }
 

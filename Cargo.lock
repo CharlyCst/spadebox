@@ -2549,6 +2549,8 @@ version = "0.5.1"
 dependencies = [
  "boa_engine",
  "cap-std",
+ "futures-concurrency",
+ "futures-lite",
  "globset",
  "grep-regex",
  "grep-searcher",
@@ -2572,7 +2574,6 @@ dependencies = [
  "napi-derive",
  "serde_json",
  "spadebox-core",
- "tokio",
 ]
 
 [[package]]
@@ -2594,7 +2595,6 @@ dependencies = [
  "pyo3",
  "serde_json",
  "spadebox-core",
- "tokio",
 ]
 
 [[package]]
