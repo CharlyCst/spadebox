@@ -48,6 +48,8 @@ Focus on your domain-specific tools and harness — give your agent SpadeBox for
 
 ## Usage
 
+(checkout out the [documentation](https://spadebox.github.io/docs/about) for more)
+
 ### JavaScript
 
 ```js
